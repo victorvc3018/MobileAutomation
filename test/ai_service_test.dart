@@ -25,4 +25,24 @@ void main() {
     expect(AiService.nvidiaDefaultModel, 'z-ai/glm-5.2');
     expect(AiService.nvidiaFreeChatModels.first, 'z-ai/glm-5.2');
   });
+
+  test('recognizes Google generative language API URLs', () {
+    expect(
+      AiService.isGoogleBaseUrl('https://generativelanguage.googleapis.com/v1beta/openai/'),
+      isTrue,
+    );
+    expect(
+      AiService.isGoogleBaseUrl('https://generativelanguage.googleapis.com/v1beta'),
+      isTrue,
+    );
+    expect(AiService.isGoogleBaseUrl('https://api.deepseek.com'), isFalse);
+  });
+
+  test('ranks Pro models before Flash models', () {
+    final models = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-2.0-pro-exp-02-05'];
+    models.sort(AiService.compareGoogleModels);
+    expect(models.first, 'gemini-2.0-pro-exp-02-05');
+    expect(models[1], 'gemini-1.5-pro');
+    expect(models[2], 'gemini-2.0-flash');
+  });
 }
