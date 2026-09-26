@@ -10,6 +10,7 @@ import 'task_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../config/feature_flags.dart';
+import '../services/google_auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AiService aiService;
@@ -31,6 +32,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
+  final GoogleAuthService _googleAuth = GoogleAuthService();
   late TextEditingController _apiKeyController;
   late TextEditingController _baseUrlController;
   late TextEditingController _modelController;
@@ -79,6 +81,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (FeatureFlags.floatingOverlayEnabled) {
       _checkOverlayStatus();
     }
+    _googleAuth.init().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _checkOverlayStatus() async {
@@ -444,7 +449,117 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
 
-          // 2. AI Engine Config Card
+          // 2. Google AI Account Sign-In Card (Direct Google Login)
+          _buildSettingsCard(
+            icon: Icons.account_circle,
+            title: 'Google AI / Account Sign-In',
+            subtitle: _googleAuth.isSignedIn
+                ? 'Connected: ${_googleAuth.accountEmail}'
+                : 'Directly use Gemini 2.0 Flash with your Google account',
+            isDark: isDark,
+            children: [
+              if (_googleAuth.isSignedIn) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF4285F4).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4285F4).withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF4285F4),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _googleAuth.accountEmail ?? 'Google Account',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Active: Gemini 2.0 Flash (OpenAI endpoint)',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () async {
+                          await _googleAuth.signOut(widget.aiService);
+                          _apiKeyController.text = widget.aiService.apiKey;
+                          _baseUrlController.text = widget.aiService.baseUrl;
+                          _modelController.text = widget.aiService.model;
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.redAccent),
+                        label: const Text(
+                          'Sign Out',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final signedIn = await GoogleAuthService.showGoogleSignInSheet(
+                        context: context,
+                        googleAuth: _googleAuth,
+                        aiService: widget.aiService,
+                      );
+                      if (signedIn == true) {
+                        _apiKeyController.text = widget.aiService.apiKey;
+                        _baseUrlController.text = widget.aiService.baseUrl;
+                        _modelController.text = widget.aiService.model;
+                        setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.login_rounded, size: 20),
+                    label: const Text(
+                      'Sign in with Google Account',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4285F4),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          // 3. AI Engine Config Card
           _buildSettingsCard(
             icon: Icons.psychology_outlined,
             title: 'AI Engine Configuration',
@@ -481,6 +596,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  ActionChip(
+                    avatar: const Icon(
+                      Icons.auto_awesome,
+                      size: 16,
+                      color: Color(0xFF4285F4),
+                    ),
+                    label: const Text(
+                      'Google Gemini',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    tooltip: 'Google Gemini 2.0 Flash endpoint',
+                    onPressed: () {
+                      _baseUrlController.text = AiService.googleBaseUrl;
+                      _modelController.text = AiService.googleDefaultModel;
+                      if (!_googleAuth.isSignedIn) {
+                        GoogleAuthService.showGoogleSignInSheet(
+                          context: context,
+                          googleAuth: _googleAuth,
+                          aiService: widget.aiService,
+                        ).then((signedIn) {
+                          if (signedIn == true) {
+                            _apiKeyController.text = widget.aiService.apiKey;
+                            _baseUrlController.text = widget.aiService.baseUrl;
+                            _modelController.text = widget.aiService.model;
+                            setState(() {});
+                          }
+                        });
+                      }
+                    },
+                  ),
                   ActionChip(
                     label: const Text(
                       'Local Server',

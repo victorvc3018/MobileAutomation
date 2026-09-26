@@ -6,6 +6,7 @@ import 'dart:ui';
 import '../config/feature_flags.dart';
 import '../services/ai_service.dart';
 import '../services/screen_automation_service.dart';
+import '../services/google_auth_service.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final ScreenAutomationService _screenAutomationService =
       ScreenAutomationService();
   final AiService _aiService = AiService();
+  final GoogleAuthService _googleAuth = GoogleAuthService();
 
   int _currentStep = 0;
   bool _isAccessibilityGranted = false;
@@ -54,9 +56,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _loadAiDefaults() async {
     await _aiService.init();
+    await _googleAuth.init();
     if (!mounted || !_aiService.isConfigured) return;
     setState(() {
-      _selectedProvider = 'custom';
+      _selectedProvider = AiService.isGoogleBaseUrl(_aiService.baseUrl) ? 'google' : 'custom';
       _apiKeyController.text = _aiService.apiKey;
       _baseUrlController.text = _aiService.baseUrl;
       _modelController.text = _aiService.model;
@@ -157,7 +160,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     setState(() {
       _selectedProvider = provider;
       _validationError = null;
-      if (provider == 'deepseek') {
+      if (provider == 'google') {
+        _baseUrlController.text = AiService.googleBaseUrl;
+        _modelController.text = AiService.googleDefaultModel;
+        if (!_googleAuth.isSignedIn) {
+          Future.microtask(() {
+            GoogleAuthService.showGoogleSignInSheet(
+              context: context,
+              googleAuth: _googleAuth,
+              aiService: _aiService,
+            ).then((signedIn) {
+              if (signedIn == true) {
+                _apiKeyController.text = _aiService.apiKey;
+                _baseUrlController.text = _aiService.baseUrl;
+                _modelController.text = _aiService.model;
+                setState(() {});
+              }
+            });
+          });
+        } else {
+          _apiKeyController.text = _googleAuth.authToken ?? _aiService.apiKey;
+        }
+      } else if (provider == 'deepseek') {
         _baseUrlController.text = 'https://api.deepseek.com';
         _modelController.text = 'deepseek-chat';
       } else if (provider == 'groq') {
@@ -1115,6 +1139,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               physics: const BouncingScrollPhysics(),
               children: [
                 _buildProviderCard(
+                  'google',
+                  'Google AI',
+                  Icons.auto_awesome_rounded,
+                  isDark,
+                ),
+                const SizedBox(width: 10),
+                _buildProviderCard(
                   'deepseek',
                   'DeepSeek',
                   Icons.analytics_rounded,
@@ -1159,6 +1190,42 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
+                if (_selectedProvider == 'google') ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final signedIn = await GoogleAuthService.showGoogleSignInSheet(
+                          context: context,
+                          googleAuth: _googleAuth,
+                          aiService: _aiService,
+                        );
+                        if (signedIn == true) {
+                          _apiKeyController.text = _aiService.apiKey;
+                          _baseUrlController.text = _aiService.baseUrl;
+                          _modelController.text = _aiService.model;
+                          setState(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.account_circle, size: 20),
+                      label: Text(
+                        _googleAuth.isSignedIn
+                            ? 'Connected: ${_googleAuth.accountEmail}'
+                            : 'Sign in with Google Account',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4285F4),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 if (_selectedProvider != 'ollama' &&
                     _selectedProvider != 'local') ...[
                   _buildFormTextField(

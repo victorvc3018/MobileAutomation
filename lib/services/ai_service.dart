@@ -15,6 +15,14 @@ class AiService {
   static const String _defaultModel = 'deepseek-chat';
   static const String nvidiaBaseUrl = 'https://integrate.api.nvidia.com/v1';
   static const String nvidiaDefaultModel = 'z-ai/glm-5.2';
+  static const String googleBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  static const String googleDefaultModel = 'gemini-2.0-flash';
+  static const List<String> googleModels = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ];
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
   /// The live /models response is intersected with this list so unavailable or
@@ -46,6 +54,12 @@ class AiService {
     return nvidiaFreeChatModels
         .where(availableModels.contains)
         .toList(growable: false);
+  }
+
+  static bool isGoogleBaseUrl(String baseUrl) {
+    final uri = Uri.tryParse(baseUrl.trim());
+    return uri?.host.toLowerCase().contains('generativelanguage.googleapis.com') == true ||
+        baseUrl.contains('generativelanguage.googleapis.com');
   }
 
   String? _apiKey;
@@ -618,6 +632,9 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   ) async {
     try {
       String cleanBaseUrl = baseUrl;
+      if (isGoogleBaseUrl(cleanBaseUrl)) {
+        return googleModels;
+      }
       // Many providers host it at /models, but some require the base URL without /chat/completions logic
       if (cleanBaseUrl.endsWith('/chat/completions')) {
         cleanBaseUrl = cleanBaseUrl.replaceAll('/chat/completions', '');
