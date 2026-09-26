@@ -95,6 +95,23 @@ class GoogleAuthService {
       ),
     );
   }
+
+  /// Displays an interactive Google Gemini Model Selector with Pro / Flash badges and descriptions
+  static Future<String?> showGoogleModelPicker({
+    required BuildContext context,
+    required AiService aiService,
+    required String currentModel,
+  }) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _GoogleModelPickerSheet(
+        aiService: aiService,
+        currentModel: currentModel,
+      ),
+    );
+  }
 }
 
 class _GoogleSignInSheet extends StatefulWidget {
@@ -433,6 +450,523 @@ class _GoogleSignInSheetState extends State<_GoogleSignInSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _GoogleModelPickerSheet extends StatefulWidget {
+  final AiService aiService;
+  final String currentModel;
+
+  const _GoogleModelPickerSheet({
+    required this.aiService,
+    required this.currentModel,
+  });
+
+  @override
+  State<_GoogleModelPickerSheet> createState() => _GoogleModelPickerSheetState();
+}
+
+class _GoogleModelPickerSheetState extends State<_GoogleModelPickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  List<String> _models = [];
+  bool _isLoading = true;
+  String _filter = 'all'; // 'all', 'pro', 'flash', 'thinking'
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
+    _loadModels();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadModels() async {
+    setState(() => _isLoading = true);
+    try {
+      final list = await widget.aiService.fetchAvailableModels(
+        AiService.googleBaseUrl,
+        widget.aiService.apiKey,
+      );
+      if (mounted) {
+        setState(() {
+          _models = list;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _models = AiService.googleModels;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<String> get _filteredModels {
+    var list = _models;
+    if (_filter == 'pro') {
+      list = list.where((m) => m.toLowerCase().contains('pro')).toList();
+    } else if (_filter == 'flash') {
+      list = list.where((m) => m.toLowerCase().contains('flash') && !m.toLowerCase().contains('thinking')).toList();
+    } else if (_filter == 'thinking') {
+      list = list.where((m) => m.toLowerCase().contains('thinking')).toList();
+    }
+
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((m) {
+        final lower = m.toLowerCase();
+        return lower.contains(_searchQuery) ||
+            _getModelCategory(m).toLowerCase().contains(_searchQuery) ||
+            _getModelDescription(m).toLowerCase().contains(_searchQuery);
+      }).toList();
+    }
+    return list;
+  }
+
+  String _getModelCategory(String model) {
+    final lower = model.toLowerCase();
+    if (lower.contains('pro')) return 'PRO';
+    if (lower.contains('thinking')) return 'THINKING';
+    if (lower.contains('lite') || lower.contains('8b')) return 'LITE';
+    if (lower.contains('flash')) return 'FLASH';
+    return 'MODEL';
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'PRO':
+        return const Color(0xFF9C27B0); // Deep Purple
+      case 'THINKING':
+        return const Color(0xFFFF9800); // Amber
+      case 'LITE':
+        return const Color(0xFF009688); // Teal
+      case 'FLASH':
+      default:
+        return const Color(0xFF1E88E5); // Blue
+    }
+  }
+
+  String? _getRecommendationTag(String model) {
+    final lower = model.toLowerCase();
+    if (lower == 'gemini-1.5-pro' || lower.contains('2.0-pro') || lower.contains('2.5-pro')) {
+      return 'Best for Complex Tasks';
+    }
+    if (lower == 'gemini-2.0-flash' || lower.contains('2.5-flash')) {
+      return 'Best for Fast Navigation';
+    }
+    if (lower.contains('thinking')) {
+      return 'Best for Visual Reasoning';
+    }
+    return null;
+  }
+
+  String _getModelDescription(String model) {
+    final lower = model.toLowerCase();
+    if (lower.contains('2.5-pro') || lower.contains('2.0-pro')) {
+      return 'Frontier reasoning engine. Exceptional at complex multi-app phone workflows, reading dense screens, and multi-step logic.';
+    }
+    if (lower.contains('pro')) {
+      return 'Deep reasoning & high accuracy. Ideal for complex phone automation, long task chains, and accurate UI element targeting.';
+    }
+    if (lower.contains('thinking')) {
+      return 'Extended chain-of-thought analysis. Thinks through accessibility hierarchy and tricky layouts before performing phone gestures.';
+    }
+    if (lower.contains('lite') || lower.contains('8b')) {
+      return 'Ultra-lightweight & rapid response. Best for simple single-step taps and high-frequency phone actions.';
+    }
+    return 'Ultra-fast response time. Perfect for immediate tapping, rapid scrolling, and real-time screen navigation.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final displayModels = _filteredModels;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.82,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Center handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4285F4).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.smart_toy_rounded,
+                  color: Color(0xFF4285F4),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Choose Model for Phone Control',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Select which Gemini model will analyze your screen and tap',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: 'Refresh live models from Google',
+                onPressed: _isLoading ? null : _loadModels,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Pro Plan Info Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9C27B0).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF9C27B0).withOpacity(0.25),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Color(0xFF9C27B0),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Google AI Pro Plan: Select a Pro model (e.g. Gemini 1.5 Pro, 2.0 Pro) for maximum reasoning accuracy across multi-app phone workflows.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.3,
+                      color: isDark ? const Color(0xFFCE93D8) : const Color(0xFF6A1B9A),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Search Field
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search models (e.g. pro, flash, 1.5, 2.0)...',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () => _searchController.clear(),
+                    )
+                  : null,
+              filled: true,
+              fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Filter chips (All / Pro / Flash / Thinking)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All Models', style: TextStyle(fontSize: 12)),
+                  selected: _filter == 'all',
+                  onSelected: (val) => setState(() => _filter = 'all'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.star_rounded, size: 14, color: Colors.purple),
+                  label: const Text('Pro Models', style: TextStyle(fontSize: 12)),
+                  selected: _filter == 'pro',
+                  onSelected: (val) => setState(() => _filter = 'pro'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.bolt_rounded, size: 14, color: Colors.blue),
+                  label: const Text('Flash Models', style: TextStyle(fontSize: 12)),
+                  selected: _filter == 'flash',
+                  onSelected: (val) => setState(() => _filter = 'flash'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  avatar: const Icon(Icons.psychology_rounded, size: 14, color: Colors.amber),
+                  label: const Text('Thinking', style: TextStyle(fontSize: 12)),
+                  selected: _filter == 'thinking',
+                  onSelected: (val) => setState(() => _filter = 'thinking'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Models List
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(strokeWidth: 2.5),
+                        SizedBox(height: 16),
+                        Text(
+                          'Querying Google API for accessible models on your account...',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
+                : displayModels.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No models found matching the filter.',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: displayModels.length,
+                        itemBuilder: (context, index) {
+                          final model = displayModels[index];
+                          final isSelected = widget.currentModel == model;
+                          final category = _getModelCategory(model);
+                          final catColor = _getCategoryColor(category);
+                          final recoTag = _getRecommendationTag(model);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF4285F4).withOpacity(0.08)
+                                  : (isDark
+                                      ? const Color(0xFF0F172A)
+                                      : const Color(0xFFF8FAFC)),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF4285F4)
+                                    : (isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFE2E8F0)),
+                                width: isSelected ? 1.8 : 1.0,
+                              ),
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () async {
+                                await widget.aiService.saveSettings(
+                                  apiKey: widget.aiService.apiKey,
+                                  baseUrl: widget.aiService.baseUrl,
+                                  model: model,
+                                );
+                                if (mounted) {
+                                  Navigator.pop(context, model);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.check_circle_rounded,
+                                              color: Colors.white, size: 20),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'Active Model set to $model for Phone Control',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFF4285F4),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Radio/Check Icon
+                                    Icon(
+                                      isSelected
+                                          ? Icons.radio_button_checked_rounded
+                                          : Icons.radio_button_off_rounded,
+                                      color: isSelected
+                                          ? const Color(0xFF4285F4)
+                                          : Colors.grey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Model Info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  model,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                    color: isSelected
+                                                        ? const Color(0xFF4285F4)
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: catColor.withOpacity(0.15),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: catColor.withOpacity(0.4),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  category,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: catColor,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (recoTag != null) ...[
+                                            const SizedBox(height: 3),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 1.5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.withOpacity(0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                '✨ $recoTag',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            _getModelDescription(model),
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              height: 1.35,
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

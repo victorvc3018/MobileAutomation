@@ -185,6 +185,20 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
 
+    if (AiService.isGoogleBaseUrl(baseUrl)) {
+      final selectedModel = await GoogleAuthService.showGoogleModelPicker(
+        context: context,
+        aiService: widget.aiService,
+        currentModel: _modelController.text,
+      );
+      if (selectedModel != null && mounted) {
+        setState(() {
+          _modelController.text = selectedModel;
+        });
+      }
+      return;
+    }
+
     // Show loading
     showDialog(
       context: context,
@@ -449,71 +463,237 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
 
-          // 2. Google AI Account Sign-In Card (Direct Google Login)
+          // 2. Google AI Account Sign-In Card (Direct Google Login & Pro Model Control)
           _buildSettingsCard(
             icon: Icons.account_circle,
             title: 'Google AI / Account Sign-In',
             subtitle: _googleAuth.isSignedIn
                 ? 'Connected: ${_googleAuth.accountEmail}'
-                : 'Directly use Gemini 2.0 Flash with your Google account',
+                : 'Directly use Gemini models with your Google account',
             isDark: isDark,
             children: [
               if (_googleAuth.isSignedIn) ...[
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4285F4).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: const Color(0xFF4285F4).withOpacity(0.3),
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4285F4).withOpacity(0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_circle_rounded,
-                          color: Color(0xFF4285F4),
-                          size: 22,
-                        ),
+                      // User header row
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4285F4).withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.account_circle_rounded,
+                              color: Color(0xFF4285F4),
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        _googleAuth.accountEmail ?? 'Google Account',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Connected',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Google AI Pro Plan / Gemini API Active',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              await _googleAuth.signOut(widget.aiService);
+                              _apiKeyController.text = widget.aiService.apiKey;
+                              _baseUrlController.text = widget.aiService.baseUrl;
+                              _modelController.text = widget.aiService.model;
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.redAccent),
+                            label: const Text(
+                              'Sign Out',
+                              style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
+                      const SizedBox(height: 14),
+
+                      // Active Phone Control Model Box
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: _modelController.text.contains('pro')
+                                        ? Colors.purple.withOpacity(0.15)
+                                        : Colors.blue.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    _modelController.text.contains('pro')
+                                        ? Icons.star_rounded
+                                        : Icons.bolt_rounded,
+                                    color: _modelController.text.contains('pro')
+                                        ? Colors.purple
+                                        : const Color(0xFF1E88E5),
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Active Model for Phone Control',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _modelController.text.contains('pro')
+                                        ? Colors.purple.withOpacity(0.15)
+                                        : Colors.blue.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _modelController.text.contains('pro')
+                                        ? 'PRO'
+                                        : (_modelController.text.contains('thinking')
+                                            ? 'THINKING'
+                                            : 'FLASH'),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: _modelController.text.contains('pro')
+                                          ? Colors.purple
+                                          : const Color(0xFF1E88E5),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
                             Text(
-                              _googleAuth.accountEmail ?? 'Google Account',
+                              _modelController.text.isNotEmpty
+                                  ? _modelController.text
+                                  : AiService.googleDefaultModel,
                               style: const TextStyle(
+                                fontSize: 14.5,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Active: Gemini 2.0 Flash (OpenAI endpoint)',
-                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            const SizedBox(height: 4),
+                            Text(
+                              _modelController.text.contains('pro')
+                                  ? 'Deep reasoning mode: Best for complex multi-app tasks, dense screens, and detailed forms.'
+                                  : 'Fast mode: Ultra-responsive for immediate taps, scrolling, and real-time screen navigation.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 40,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final chosen = await GoogleAuthService.showGoogleModelPicker(
+                                    context: context,
+                                    aiService: widget.aiService,
+                                    currentModel: _modelController.text,
+                                  );
+                                  if (chosen != null && mounted) {
+                                    setState(() {
+                                      _modelController.text = chosen;
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.tune_rounded, size: 16),
+                                label: const Text(
+                                  'Select Model for Phone Control (Pro / Flash)',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4285F4),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () async {
-                          await _googleAuth.signOut(widget.aiService);
-                          _apiKeyController.text = widget.aiService.apiKey;
-                          _baseUrlController.text = widget.aiService.baseUrl;
-                          _modelController.text = widget.aiService.model;
-                          setState(() {});
-                        },
-                        icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.redAccent),
-                        label: const Text(
-                          'Sign Out',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
                         ),
                       ),
                     ],
@@ -535,6 +715,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _baseUrlController.text = widget.aiService.baseUrl;
                         _modelController.text = widget.aiService.model;
                         setState(() {});
+                        if (mounted) {
+                          final chosen = await GoogleAuthService.showGoogleModelPicker(
+                            context: context,
+                            aiService: widget.aiService,
+                            currentModel: widget.aiService.model,
+                          );
+                          if (chosen != null && mounted) {
+                            setState(() {
+                              _modelController.text = chosen;
+                            });
+                          }
+                        }
                       }
                     },
                     icon: const Icon(Icons.login_rounded, size: 20),

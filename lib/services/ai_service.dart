@@ -18,11 +18,45 @@ class AiService {
   static const String googleBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
   static const String googleDefaultModel = 'gemini-2.0-flash';
   static const List<String> googleModels = [
+    'gemini-2.5-pro',
+    'gemini-2.0-pro-exp-02-05',
+    'gemini-1.5-pro',
+    'gemini-1.5-pro-latest',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
+    'gemini-2.0-flash-thinking-exp-01-21',
+    'gemini-2.0-flash-thinking-exp',
     'gemini-2.0-flash-lite',
     'gemini-1.5-flash',
-    'gemini-1.5-pro',
+    'gemini-1.5-flash-8b',
   ];
+
+  static int compareGoogleModels(String a, String b) {
+    int rank(String m) {
+      final l = m.toLowerCase();
+      if (l.contains('2.5-pro')) return 1;
+      if (l.contains('2.0-pro')) return 2;
+      if (l.contains('1.5-pro')) return 3;
+      if (l.contains('pro')) return 4;
+      if (l.contains('thinking')) return 5;
+      if (l.contains('2.5-flash')) return 6;
+      if (l.contains('2.0-flash')) return 7;
+      if (l.contains('1.5-flash')) return 8;
+      if (l.contains('flash')) return 9;
+      if (l.contains('lite') || l.contains('8b')) return 10;
+      return 11;
+    }
+    final rA = rank(a);
+    final rB = rank(b);
+    if (rA != rB) return rA.compareTo(rB);
+    return a.compareTo(b);
+  }
+
+  static bool isGoogleBaseUrl(String baseUrl) {
+    final uri = Uri.tryParse(baseUrl.trim());
+    return uri?.host.toLowerCase().contains('generativelanguage.googleapis.com') == true ||
+        baseUrl.contains('generativelanguage.googleapis.com');
+  }
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
   /// The live /models response is intersected with this list so unavailable or
@@ -54,12 +88,6 @@ class AiService {
     return nvidiaFreeChatModels
         .where(availableModels.contains)
         .toList(growable: false);
-  }
-
-  static bool isGoogleBaseUrl(String baseUrl) {
-    final uri = Uri.tryParse(baseUrl.trim());
-    return uri?.host.toLowerCase().contains('generativelanguage.googleapis.com') == true ||
-        baseUrl.contains('generativelanguage.googleapis.com');
   }
 
   String? _apiKey;
@@ -633,6 +661,63 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     try {
       String cleanBaseUrl = baseUrl;
       if (isGoogleBaseUrl(cleanBaseUrl)) {
+        // Query live Google API to see all models the user has access to on their account/plan
+        final Set<String> gatheredModels = {};
+
+        // 1. Try OpenAI-compatible endpoint
+        try {
+          final res = await http.get(
+            Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 8));
+
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            if (data is Map && data.containsKey('data')) {
+              final list = data['data'] as List;
+              for (final m in list) {
+                final id = m['id'].toString();
+                if (!id.contains('embedding') &&
+                    !id.contains('aqa') &&
+                    !id.contains('bison') &&
+                    !id.contains('imagen')) {
+                  gatheredModels.add(id);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Try native Google Gemini models endpoint
+        try {
+          final res = await http.get(
+            Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 8));
+
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            if (data is Map && data.containsKey('models')) {
+              final list = data['models'] as List;
+              for (final m in list) {
+                final id = m['name'].toString().replaceFirst('models/', '');
+                if (!id.contains('embedding') &&
+                    !id.contains('aqa') &&
+                    !id.contains('bison') &&
+                    !id.contains('imagen')) {
+                  gatheredModels.add(id);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+
+        if (gatheredModels.isNotEmpty) {
+          final result = gatheredModels.toList();
+          result.sort(compareGoogleModels);
+          return result;
+        }
+
         return googleModels;
       }
       // Many providers host it at /models, but some require the base URL without /chat/completions logic

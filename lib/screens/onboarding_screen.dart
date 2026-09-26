@@ -169,12 +169,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               context: context,
               googleAuth: _googleAuth,
               aiService: _aiService,
-            ).then((signedIn) {
+            ).then((signedIn) async {
               if (signedIn == true) {
                 _apiKeyController.text = _aiService.apiKey;
                 _baseUrlController.text = _aiService.baseUrl;
                 _modelController.text = _aiService.model;
                 setState(() {});
+                if (mounted) {
+                  final chosen = await GoogleAuthService.showGoogleModelPicker(
+                    context: context,
+                    aiService: _aiService,
+                    currentModel: _aiService.model,
+                  );
+                  if (chosen != null && mounted) {
+                    setState(() {
+                      _modelController.text = chosen;
+                    });
+                  }
+                }
               }
             });
           });
@@ -298,6 +310,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ),
         ),
       );
+      return;
+    }
+
+    if (AiService.isGoogleBaseUrl(baseUrl)) {
+      final selectedModel = await GoogleAuthService.showGoogleModelPicker(
+        context: context,
+        aiService: _aiService,
+        currentModel: _modelController.text,
+      );
+      if (selectedModel != null && mounted) {
+        setState(() {
+          _modelController.text = selectedModel;
+        });
+      }
       return;
     }
 
@@ -1192,7 +1218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               children: [
                 if (_selectedProvider == 'google') ...[
                   Container(
-                    margin: const EdgeInsets.only(bottom: 16),
+                    margin: const EdgeInsets.only(bottom: 12),
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
@@ -1206,6 +1232,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           _baseUrlController.text = _aiService.baseUrl;
                           _modelController.text = _aiService.model;
                           setState(() {});
+                          if (mounted) {
+                            final chosen = await GoogleAuthService.showGoogleModelPicker(
+                              context: context,
+                              aiService: _aiService,
+                              currentModel: _aiService.model,
+                            );
+                            if (chosen != null && mounted) {
+                              setState(() {
+                                _modelController.text = chosen;
+                              });
+                            }
+                          }
                         }
                       },
                       icon: const Icon(Icons.account_circle, size: 20),
@@ -1225,6 +1263,40 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ),
                     ),
                   ),
+                  if (_googleAuth.isSignedIn || _apiKeyController.text.isNotEmpty) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final chosen = await GoogleAuthService.showGoogleModelPicker(
+                            context: context,
+                            aiService: _aiService,
+                            currentModel: _modelController.text,
+                          );
+                          if (chosen != null && mounted) {
+                            setState(() {
+                              _modelController.text = chosen;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.tune_rounded, size: 18),
+                        label: Text(
+                          'Model: ${_modelController.text.isNotEmpty ? _modelController.text : "gemini-2.0-flash"} (Tap to change)',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF4285F4),
+                          side: const BorderSide(color: Color(0xFF4285F4)),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
                 if (_selectedProvider != 'ollama' &&
                     _selectedProvider != 'local') ...[
