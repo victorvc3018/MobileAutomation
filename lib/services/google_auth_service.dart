@@ -509,7 +509,7 @@ class _GoogleSignInSheetState extends State<_GoogleSignInSheet> {
                       color: const Color(0xFF34A853).withOpacity(0.3),
                     ),
                   ),
-                  alignment: Alignment.Center,
+                  alignment: Alignment.center,
                   child: const Text(
                     'G',
                     style: TextStyle(
