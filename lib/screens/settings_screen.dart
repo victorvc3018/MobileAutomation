@@ -463,13 +463,13 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
 
-          // 2. Google AI Account Sign-In Card (Direct Google Login & Pro Model Control)
+          // 2. Google Account Card (Direct Google OAuth matching Mobile-Harness)
           _buildSettingsCard(
             icon: Icons.account_circle,
-            title: 'Google AI / Account Sign-In',
+            title: 'Google account',
             subtitle: _googleAuth.isSignedIn
-                ? 'Connected: ${_googleAuth.accountEmail}'
-                : 'Directly use Gemini models with your Google account',
+                ? 'Connected with Google (${_googleAuth.accountEmail})'
+                : 'Directly connect your Google account to access your free & Pro models',
             isDark: isDark,
             children: [
               if (_googleAuth.isSignedIn) ...[

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/agent_action.dart';
+import 'google_auth_service.dart';
 
 class AiResponse {
   final String content;
@@ -17,19 +18,6 @@ class AiService {
   static const String nvidiaDefaultModel = 'z-ai/glm-5.2';
   static const String googleBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
   static const String googleDefaultModel = 'gemini-2.0-flash';
-  static const List<String> googleModels = [
-    'gemini-2.5-pro',
-    'gemini-2.0-pro-exp-02-05',
-    'gemini-1.5-pro',
-    'gemini-1.5-pro-latest',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-thinking-exp-01-21',
-    'gemini-2.0-flash-thinking-exp',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-  ];
 
   static int compareGoogleModels(String a, String b) {
     int rank(String m) {
@@ -255,6 +243,13 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
       throw Exception('API Key is not configured. Please go to Settings.');
     }
 
+    if (isGoogleBaseUrl(_baseUrl) && GoogleAuthService.instance.isSignedIn) {
+      final fresh = await GoogleAuthService.instance.ensureFreshToken(this);
+      if (fresh != null && fresh.isNotEmpty) {
+        _apiKey = fresh;
+      }
+    }
+
     // Add ONLY the text to the persistent conversation history to save tokens.
     _conversationHistory.add({'role': 'user', 'content': message});
 
@@ -368,6 +363,13 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   }) async* {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
+    }
+
+    if (isGoogleBaseUrl(_baseUrl) && GoogleAuthService.instance.isSignedIn) {
+      final fresh = await GoogleAuthService.instance.ensureFreshToken(this);
+      if (fresh != null && fresh.isNotEmpty) {
+        _apiKey = fresh;
+      }
     }
 
     _conversationHistory.add({'role': 'user', 'content': message});
@@ -514,6 +516,13 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   Future<AiResponse> sendTaskMessage(String systemPrompt, String prompt) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
+    }
+
+    if (isGoogleBaseUrl(_baseUrl) && GoogleAuthService.instance.isSignedIn) {
+      final fresh = await GoogleAuthService.instance.ensureFreshToken(this);
+      if (fresh != null && fresh.isNotEmpty) {
+        _apiKey = fresh;
+      }
     }
 
     int maxRetries = 4;
@@ -664,24 +673,39 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
         // Query live Google API to see all models the user has access to on their account/plan
         final Set<String> gatheredModels = {};
 
-        // 1. Try OpenAI-compatible endpoint
+        // 1. Antigravity internal models endpoint
         try {
-          final res = await http.get(
-            Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/models'),
-            headers: {'Authorization': 'Bearer $apiKey'},
-          ).timeout(const Duration(seconds: 8));
+          final res = await http.post(
+            Uri.parse('https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels'),
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+              'User-Agent': 'antigravity',
+            },
+            body: jsonEncode({
+              'ideName': 'antigravity',
+              'extensionName': 'antigravity',
+              'locale': 'en',
+              'ideVersion': 'unknown',
+            }),
+          ).timeout(const Duration(seconds: 10));
 
           if (res.statusCode == 200) {
             final data = jsonDecode(res.body);
-            if (data is Map && data.containsKey('data')) {
-              final list = data['data'] as List;
-              for (final m in list) {
-                final id = m['id'].toString();
-                if (!id.contains('embedding') &&
-                    !id.contains('aqa') &&
-                    !id.contains('bison') &&
-                    !id.contains('imagen')) {
-                  gatheredModels.add(id);
+            if (data is Map && data.containsKey('models')) {
+              final modelsObj = data['models'];
+              if (modelsObj is Map) {
+                for (final key in modelsObj.keys) {
+                  gatheredModels.add(key.toString());
+                }
+              } else if (modelsObj is List) {
+                for (final item in modelsObj) {
+                  if (item is String) {
+                    gatheredModels.add(item);
+                  } else if (item is Map) {
+                    final id = item['modelId'] ?? item['id'] ?? item['name'];
+                    if (id != null) gatheredModels.add(id.toString());
+                  }
                 }
               }
             }
@@ -691,9 +715,9 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
         // 2. Try native Google Gemini models endpoint
         try {
           final res = await http.get(
-            Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey'),
+            Uri.parse('https://generativelanguage.googleapis.com/v1beta/models'),
             headers: {'Authorization': 'Bearer $apiKey'},
-          ).timeout(const Duration(seconds: 8));
+          ).timeout(const Duration(seconds: 10));
 
           if (res.statusCode == 200) {
             final data = jsonDecode(res.body);
@@ -712,13 +736,37 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
           }
         } catch (_) {}
 
+        // 3. Try OpenAI-compatible endpoint
+        try {
+          final res = await http.get(
+            Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 10));
+
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            if (data is Map && data.containsKey('data')) {
+              final list = data['data'] as List;
+              for (final m in list) {
+                final id = m['id'].toString();
+                if (!id.contains('embedding') &&
+                    !id.contains('aqa') &&
+                    !id.contains('bison') &&
+                    !id.contains('imagen')) {
+                  gatheredModels.add(id);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+
         if (gatheredModels.isNotEmpty) {
           final result = gatheredModels.toList();
           result.sort(compareGoogleModels);
           return result;
         }
 
-        return googleModels;
+        return [];
       }
       // Many providers host it at /models, but some require the base URL without /chat/completions logic
       if (cleanBaseUrl.endsWith('/chat/completions')) {
