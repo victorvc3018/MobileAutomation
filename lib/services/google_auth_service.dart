@@ -32,8 +32,7 @@ class GoogleAuthService {
       'https://www.googleapis.com/auth/userinfo.profile '
       'https://www.googleapis.com/auth/cclog '
       'https://www.googleapis.com/auth/experimentsandconfigs '
-      'https://www.googleapis.com/auth/generative-language '
-      'https://www.googleapis.com/auth/generative-language.retriever';
+      'openid';
 
   static const String prefKeyEmail = 'google_account_email';
   static const String prefKeyToken = 'google_auth_token';
