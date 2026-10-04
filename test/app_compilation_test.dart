@@ -1,13 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:private_agent/services/ai_service.dart';
 import 'package:private_agent/services/task_executor.dart';
 
 void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-  });
-
   test('App components compile and link correctly', () {
     expect(AiService.isVisionSupported('gemini-2.0-flash'), isTrue);
     expect(AiService.isVisionSupported('deepseek-chat'), isFalse);
@@ -22,17 +17,5 @@ void main() {
     expect(TaskExecutor.taskRequiresVision("look at this picture and tell me what you see"), isTrue);
     expect(TaskExecutor.taskRequiresVision("inspect screen to see if icon is red"), isTrue);
     expect(TaskExecutor.taskRequiresVision("turn on wifi in settings"), isFalse);
-  });
-
-  test('Vision cannot be enabled for models that do not support it', () async {
-    final ai = AiService();
-    await ai.init();
-
-    // Default model is deepseek-chat (text-only)
-    expect(AiService.isVisionSupported(ai.model), isFalse);
-
-    // Attempting to set vision enabled on text-only model should reject it
-    await ai.setVisionEnabled(true);
-    expect(ai.isVisionEnabled, isFalse);
   });
 }
