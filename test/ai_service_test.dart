@@ -66,6 +66,11 @@ void main() {
     expect(AiService.isVisionSupported('qwen/qwen-2-vl-72b-instruct'), isTrue);
     expect(AiService.isVisionSupported('meta-llama/llama-3.2-11b-vision-instruct'), isTrue);
     expect(AiService.isVisionSupported('mistralai/pixtral-12b'), isTrue);
+    expect(AiService.isVisionSupported('stealth/space-bunny-alpha'), isTrue);
+    expect(AiService.isVisionSupported('space-bunny-alpha'), isTrue);
+    expect(AiService.isVisionSupported('space bunny alpha'), isTrue);
+    expect(AiService.isVisionSupported('stealth/union-alpha'), isTrue);
+    expect(AiService.isVisionSupported('qwen/qvq-72b-preview'), isTrue);
 
     // Text-only models return false
     expect(AiService.isVisionSupported('deepseek-chat'), isFalse);

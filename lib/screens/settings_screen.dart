@@ -1187,7 +1187,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Version'),
-                  subtitle: const Text('1.0.6 (Build 2026) - Vision Mode & Silent TTS'),
+                  subtitle: const Text('1.0.7 (Build 2027) - Space Bunny & Multimodal Support'),
                   leading: const Icon(Icons.verified_rounded, color: Colors.indigoAccent),
                 ),
                 ListTile(

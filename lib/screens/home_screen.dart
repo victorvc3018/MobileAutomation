@@ -117,8 +117,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Ephemeral screenshot capture for vision: deleted immediately after response
     String? screenshotBase64;
-    final bool canUseVision =
-        _visionEnabled && AiService.isVisionSupported(_aiService.model);
+    final bool canUseVision = _visionEnabled;
     if (canUseVision) {
       try {
         screenshotBase64 =
@@ -985,7 +984,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           Center(
             child: Text(
-              'PrivateAgent v1.0.6 (Vision Enabled)',
+              'PrivateAgent v1.0.7 (Vision Enabled)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

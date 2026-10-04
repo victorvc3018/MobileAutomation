@@ -44,15 +44,34 @@ class AiService {
       return true;
     }
 
+    // OpenRouter Stealth multimodal models (e.g. stealth/space-bunny-alpha, union-alpha)
+    if (m.contains('space-bunny') ||
+        m.contains('spacebunny') ||
+        m.contains('space bunny') ||
+        m.contains('stealth/') ||
+        m.contains('union-alpha') ||
+        m.contains('ox-alpha')) {
+      return true;
+    }
+
     // Vision-language flags across open-source / OpenRouter
     if (m.contains('-vl') ||
         m.contains('_vl') ||
+        m.contains('/vl') ||
         m.contains('vision') ||
         m.contains('pixtral') ||
         m.contains('llava') ||
         m.contains('neva') ||
         m.contains('fuyu') ||
-        m.contains('minicpm-v')) {
+        m.contains('minicpm') ||
+        m.contains('molmo') ||
+        m.contains('janus') ||
+        m.contains('qvq') ||
+        m.contains('internvl') ||
+        m.contains('paligemma') ||
+        m.contains('aria') ||
+        m.contains('omni') ||
+        m.contains('multimodal')) {
       return true;
     }
 

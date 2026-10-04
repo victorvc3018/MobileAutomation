@@ -1,4 +1,4 @@
-﻿name: Android release artifacts
+name: Android release artifacts
 
 on:
   workflow_dispatch:
@@ -63,7 +63,9 @@ jobs:
           body: |
             ## 📱 PrivateAgent Mobile Automation Release
 
-            ### What's New in v1.0.6:
+            ### What's New in v1.0.7:
+            - 🐰 **Full OpenRouter Space Bunny Support**: Native multimodal vision enabled for stealth/space-bunny-alpha, union-alpha, qvq, and all stealth/VL models.
+            - 👁️ **Forced Vision Toggle**: Toggling Vision ON now captures and forwards screenshots regardless of client model name whitelist.
             - 👁️ **Vision Mode Toggle**: Toggle between visual screen understanding (multimodal screenshots) and accessibility hierarchy text dumps.
             - 🔒 **Zero Data Retention**: Ephemeral in-memory screen analysis - screenshots are analyzed and discarded immediately.
             - 🔇 **Silent Operation**: Text-to-Speech (TTS) fully disabled for quiet background automation.
