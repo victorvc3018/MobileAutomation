@@ -63,7 +63,9 @@ jobs:
           body: |
             ## 📱 PrivateAgent Mobile Automation Release
 
-            ### What's New in v1.0.8:
+            ### What's New in v1.0.9:
+            - 👁️ **Hybrid Vision-on-Demand**: Vision automatically activates on-demand whenever the agent gets stuck, when an action fails, when the screen content does not change, when the UI is sparse (games, canvases, video), or when the task naturally requests visual understanding.
+            - ⚡ **Adaptive Event-Driven Settling**: Replaced fixed 1-3 second sleep timers with real-time Android accessibility event monitoring.
             - ⚡ **Adaptive Event-Driven Settling**: Replaced fixed 1-3 second sleep timers with real-time Android accessibility event monitoring. Steps advance as soon as UI animations and content settle (often in 200-300ms), speeding up automation up to 3x.
             - 🐰 **Full OpenRouter Space Bunny Support**: Multimodal vision enabled for stealth/space-bunny-alpha and stealth models.
             - 🐰 **Full OpenRouter Space Bunny Support**: Native multimodal vision enabled for stealth/space-bunny-alpha, union-alpha, qvq, and all stealth/VL models.

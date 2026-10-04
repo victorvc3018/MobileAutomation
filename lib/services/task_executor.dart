@@ -54,6 +54,45 @@ class TaskExecutor {
     }
   }
 
+  
+  /// Checks whether a user goal or prompt intrinsically requires visual inspection.
+  static bool taskRequiresVision(String goal) {
+    final lower = goal.toLowerCase();
+    final visualKeywords = [
+      'look at',
+      'look on',
+      'look screen',
+      'see if',
+      'can you see',
+      'what is on',
+      'what\'s on',
+      'whats on',
+      'read screen',
+      'read the screen',
+      'picture',
+      'photo',
+      'image',
+      'visual',
+      'color',
+      'colour',
+      'icon',
+      'logo',
+      'chart',
+      'graph',
+      'drawing',
+      'canvas',
+      'map',
+      'camera',
+      'screenshot',
+      'inspect screen',
+      'describe screen',
+    ];
+    for (final kw in visualKeywords) {
+      if (lower.contains(kw)) return true;
+    }
+    return false;
+  }
+
   static const String _taskSystemPrompt = '''
 You are a phone automation agent. You are given a TASK and the current SCREEN content.
 You must decide what single action to take next to accomplish the task.
@@ -211,6 +250,9 @@ Rules:
       }
     }
 
+    String? previousScreenContent;
+    int screenUnchangedCount = 0;
+
     for (int step = 0; step < _aiService.maxSteps; step++) {
       // Check for cancellation
       if (_cancelled) {
@@ -260,6 +302,18 @@ Rules:
         name: 'PrivateAgent',
       );
 
+      // Detect if screen content is unchanged after the previous action ("no new thing comes up")
+      final bool isScreenUnchanged = step > 0 &&
+          previousScreenContent != null &&
+          previousScreenContent!.trim() == screenContent.trim() &&
+          lastAction != 'wait';
+      if (isScreenUnchanged) {
+        screenUnchangedCount++;
+      } else {
+        screenUnchangedCount = 0;
+      }
+      previousScreenContent = screenContent;
+
       // Determine previous result string
       final prevResultStr = step > 0 && results.isNotEmpty
           ? '\nPREVIOUS ACTION RESULT: ${results.last}\n'
@@ -272,12 +326,50 @@ Rules:
             '\n\nWARNING: You have failed $consecutiveFailures times in a row with the same approach. You MUST try a completely different action. If open_app failed, try press_home and look for the app icon on the home screen instead. If click_text failed, use click_at with coordinates. Do NOT repeat the same failed action.';
       }
 
-            // 2. Check vision capability & capture ephemeral screenshot if enabled
-      String? screenshotBase64;
-      final bool canUseVision = useVision || _aiService.isVisionEnabled;
+      String stagnationHint = '';
+      if (isScreenUnchanged) {
+        stagnationHint =
+            '\n\nCRITICAL: The previous action ($lastAction) did NOT change the screen at all. The screen is completely identical to the previous step. Do NOT repeat the exact same action. If clicking failed, use click_at with different coordinates, or scroll, or inspect the screen image.';
+      }
 
-      if (canUseVision) {
-        _report('Step ${step + 1}: Looking at screen (Vision)...');
+      // 2. Hybrid Vision-on-Demand:
+      // Dynamically activates vision when:
+      // - Already enabled manually (useVision || _aiService.isVisionEnabled)
+      // - The task intrinsically requires vision (e.g. "what's on my screen", "look at", "color", "picture")
+      // - The screen is unchanged after an action ("no new thing comes up")
+      // - The agent is stuck or previous action failed (consecutiveFailures > 0 or sameActionCount >= 2)
+      // - Accessibility tree has sparse/no text (canvas, game, video, camera, map)
+      final bool modelCanVision = AiService.isVisionSupported(_aiService.model);
+      final bool taskNeedsVision = taskRequiresVision(userGoal);
+      final bool isStuckOrStagnant = consecutiveFailures > 0 || sameActionCount >= 2 || isScreenUnchanged;
+      final bool isSparseScreen = screenContent.trim().length < 80 ||
+          screenContent.contains('Could not read screen');
+
+      final bool shouldActivateVision = modelCanVision && (
+          useVision ||
+          _aiService.isVisionEnabled ||
+          taskNeedsVision ||
+          isStuckOrStagnant ||
+          isSparseScreen
+      );
+
+      String? screenshotBase64;
+      if (shouldActivateVision) {
+        final isManualVision = useVision || _aiService.isVisionEnabled;
+        if (!isManualVision) {
+          if (taskNeedsVision) {
+            _report('Step ${step + 1}: Visual goal detected -> activating Vision on-demand...');
+          } else if (isScreenUnchanged) {
+            _report('Step ${step + 1}: Screen unchanged -> activating Vision to inspect...');
+          } else if (consecutiveFailures > 0 || sameActionCount >= 2) {
+            _report('Step ${step + 1}: Action stuck -> activating Vision to diagnose...');
+          } else if (isSparseScreen) {
+            _report('Step ${step + 1}: No text elements detected -> activating Vision...');
+          }
+        } else {
+          _report('Step ${step + 1}: Looking at screen (Vision)...');
+        }
+
         try {
           screenshotBase64 = await _screenService.takeScreenshot();
           if (screenshotBase64 != null) {
@@ -298,14 +390,14 @@ Rules:
             '''TASK: $userGoal
 
 CURRENT SCREEN:
-I have attached the screenshot of the current screen for visual understanding.${screenContent.isNotEmpty ? '\n\nTEXT DUMP REFERENCE:\n$screenContent' : ''}$prevResultStr$failureHint
+I have attached the screenshot of the current screen for visual understanding.${screenContent.isNotEmpty ? '\n\nTEXT DUMP REFERENCE:\n$screenContent' : ''}$prevResultStr$failureHint$stagnationHint
 Step ${step + 1}/${_aiService.maxSteps}. Look at the screen image and determine the next action to take to accomplish the task.''';
       } else {
         prompt =
             '''TASK: $userGoal
 
 CURRENT SCREEN TEXT DUMP:
-$screenContent$prevResultStr$failureHint
+$screenContent$prevResultStr$failureHint$stagnationHint
 Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. What is the next action?''';
       }
 

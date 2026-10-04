@@ -12,5 +12,9 @@ void main() {
     expect(AiService.isVisionSupported('deepseek-chat'), isFalse);
     expect(AiService.isVisionSupported('gpt-4o'), isTrue);
     expect(AiService.isVisionSupported('claude-3-7-sonnet'), isTrue);
+    expect(TaskExecutor.taskRequiresVision("what's on my screen right now?"), isTrue);
+    expect(TaskExecutor.taskRequiresVision("look at this picture and tell me what you see"), isTrue);
+    expect(TaskExecutor.taskRequiresVision("inspect screen to see if icon is red"), isTrue);
+    expect(TaskExecutor.taskRequiresVision("turn on wifi in settings"), isFalse);
   });
 }

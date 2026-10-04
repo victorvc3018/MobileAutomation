@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
 import '../services/action_handler.dart';
+import '../services/task_executor.dart';
 import '../services/voice_service.dart';
 import '../widgets/message_bubble.dart';
 import '../services/telegram_service.dart';
@@ -117,7 +118,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Ephemeral screenshot capture for vision: deleted immediately after response
     String? screenshotBase64;
-    final bool canUseVision = _visionEnabled;
+    final bool taskNeedsVision = TaskExecutor.taskRequiresVision(text.trim());
+    final bool canUseVision = _visionEnabled || (taskNeedsVision && AiService.isVisionSupported(_aiService.model));
     if (canUseVision) {
       try {
         screenshotBase64 =
@@ -984,7 +986,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           Center(
             child: Text(
-              'PrivateAgent v1.0.8 (Adaptive Settling & Vision)',
+              'PrivateAgent v1.0.9 (Vision on Demand)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
