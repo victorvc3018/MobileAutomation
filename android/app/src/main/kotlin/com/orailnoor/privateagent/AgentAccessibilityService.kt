@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -205,9 +206,13 @@ class AgentAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Capture screenshot as Base64 string */
+    /** Capture screenshot as Base64 string with metadata and aspect-ratio downscaling (Item #1 Optimization) */
     @RequiresApi(Build.VERSION_CODES.R)
-    fun takeScreenshot(callback: (String?) -> Unit) {
+    fun takeScreenshot(
+        targetWidth: Int = 720,
+        quality: Int = 75,
+        callback: (Map<String, Any>?) -> Unit
+    ) {
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
             mainExecutor,
@@ -216,26 +221,71 @@ class AgentAccessibilityService : AccessibilityService() {
                     val hardwareBuffer = screenshotResult.hardwareBuffer
                     val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshotResult.colorSpace)
                         ?.copy(Bitmap.Config.ARGB_8888, false)
-                    
+
                     hardwareBuffer.close()
 
                     if (bitmap != null) {
-                        // Compress to lower quality JPEG to save bytes for the API
-                        val byteArrayOutputStream = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 60, byteArrayOutputStream)
-                        val byteArray = byteArrayOutputStream.toByteArray()
-                        val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
-                        callback(base64String)
+                        try {
+                            val nativeWidth = bitmap.width
+                            val nativeHeight = bitmap.height
+
+                            // Downscale while preserving aspect ratio
+                            val scaleFactor: Float = if (nativeWidth <= nativeHeight) {
+                                if (nativeWidth > targetWidth) targetWidth.toFloat() / nativeWidth.toFloat() else 1.0f
+                            } else {
+                                val maxLandscapeWidth = (targetWidth * 16) / 9
+                                if (nativeWidth > maxLandscapeWidth) maxLandscapeWidth.toFloat() / nativeWidth.toFloat() else 1.0f
+                            }
+
+                            val scaledWidth = (nativeWidth * scaleFactor).toInt().coerceAtLeast(1)
+                            val scaledHeight = (nativeHeight * scaleFactor).toInt().coerceAtLeast(1)
+
+                            val scaledBitmap = if (scaleFactor < 0.99f) {
+                                Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true).also {
+                                    if (it != bitmap) bitmap.recycle()
+                                }
+                            } else {
+                                bitmap
+                            }
+
+                            val byteArrayOutputStream = ByteArrayOutputStream()
+                            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, byteArrayOutputStream)
+                            scaledBitmap.recycle()
+
+                            val byteArray = byteArrayOutputStream.toByteArray()
+                            val base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+                            val resultMap = mapOf<String, Any>(
+                                "base64" to base64String,
+                                "width" to scaledWidth,
+                                "height" to scaledHeight,
+                                "nativeWidth" to nativeWidth,
+                                "nativeHeight" to nativeHeight,
+                                "scale" to scaleFactor.toDouble()
+                            )
+                            callback(resultMap)
+                        } catch (e: Exception) {
+                            Log.e("AgentAccessibility", "Screenshot downscaling error", e)
+                            callback(null)
+                        }
                     } else {
                         callback(null)
                     }
                 }
 
                 override fun onFailure(errorCode: Int) {
+                    Log.e("AgentAccessibility", "takeScreenshot failed: $errorCode")
                     callback(null)
                 }
             }
         )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun takeScreenshot(callback: (String?) -> Unit) {
+        takeScreenshot(720, 75) { map ->
+            callback(map?.get("base64") as? String)
+        }
     }
 
     // ─── Actions ─────────────────────────────────────────────────

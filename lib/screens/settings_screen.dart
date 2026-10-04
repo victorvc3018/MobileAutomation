@@ -1189,7 +1189,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Version'),
-                  subtitle: const Text('1.0.10 (Build 2030) - Single-Step Vision Deactivation & Model Lock'),
+                  subtitle: const Text('1.0.11 (Build 2031) - 720p Image Downscaling & Coordinate Scaling'),
                   leading: const Icon(Icons.verified_rounded, color: Colors.indigoAccent),
                 ),
                 ListTile(

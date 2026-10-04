@@ -34,6 +34,7 @@ class TaskExecutor {
   bool _cancelled = false;
   bool visualGoalFulfilled = false;
   bool onDemandVisionActiveThisStep = false;
+  ScreenshotData? _lastScreenshotData;
   Completer<void>? _cancelCompleter;
 
   TaskExecutor({
@@ -374,10 +375,15 @@ Rules:
         }
 
         try {
-          screenshotBase64 = await _screenService.takeScreenshot();
-          if (screenshotBase64 != null) {
+          final screenshotData = await _screenService.takeScreenshotData(
+            targetWidth: 720,
+            quality: 75,
+          );
+          if (screenshotData != null) {
+            _lastScreenshotData = screenshotData;
+            screenshotBase64 = screenshotData.base64;
             developer.log(
-              'Step ${step + 1}: Captured screenshot (${screenshotBase64.length} chars)',
+              'Step ${step + 1}: Captured downscaled screenshot (${screenshotData.width}x${screenshotData.height}, scale: ${screenshotData.scale.toStringAsFixed(3)}, ${screenshotBase64.length} chars)',
               name: 'PrivateAgent',
             );
           }
@@ -388,13 +394,16 @@ Rules:
 
       // Build the prompt (system prompt is sent separately via sendTaskMessage)
       final String prompt;
-      if (screenshotBase64 != null) {
+      if (screenshotBase64 != null && _lastScreenshotData != null) {
         prompt =
             '''TASK: $userGoal
 
 CURRENT SCREEN:
-I have attached the screenshot of the current screen for visual understanding.${screenContent.isNotEmpty ? '\n\nTEXT DUMP REFERENCE:\n$screenContent' : ''}$prevResultStr$failureHint$stagnationHint
-Step ${step + 1}/${_aiService.maxSteps}. Look at the screen image and determine the next action to take to accomplish the task.''';
+I have attached the screenshot of the current screen for visual understanding.
+- Image resolution: ${_lastScreenshotData!.width}x${_lastScreenshotData!.height}
+- Device display resolution: ${_lastScreenshotData!.nativeWidth}x${_lastScreenshotData!.nativeHeight} (Downscaled ${_lastScreenshotData!.scale.toStringAsFixed(3)}x for fast inference)
+${screenContent.isNotEmpty ? '\nTEXT DUMP REFERENCE:\n$screenContent' : ''}$prevResultStr$failureHint$stagnationHint
+Step ${step + 1}/${_aiService.maxSteps}. Look at the screen image and text dump to determine the next action. If clicking an element without text, specify coordinates in the image space (0..${_lastScreenshotData!.width}, 0..${_lastScreenshotData!.height}) or native screen space.''';
       } else {
         prompt =
             '''TASK: $userGoal
@@ -605,8 +614,29 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           break;
 
         case 'click_at':
-          final x = (params['x'] as num?)?.toDouble() ?? 0;
-          final y = (params['y'] as num?)?.toDouble() ?? 0;
+          double x = (params['x'] as num?)?.toDouble() ?? 0;
+          double y = (params['y'] as num?)?.toDouble() ?? 0;
+
+          // Downscale coordinate translation:
+          // If the model identified a visual element on the downscaled image (0..width, 0..height),
+          // translate back to native screen resolution (e.g. 720p -> 1080p)
+          if (_lastScreenshotData != null && _lastScreenshotData!.scale < 0.99) {
+            final sw = _lastScreenshotData!.width;
+            final sh = _lastScreenshotData!.height;
+            final scale = _lastScreenshotData!.scale;
+
+            if (x <= sw && y <= sh && params['coordinate_space'] != 'native') {
+              final double nativeX = (x / scale).roundToDouble();
+              final double nativeY = (y / scale).roundToDouble();
+              developer.log(
+                'Scaled visual click ($x, $y) mapped to native display ($nativeX, $nativeY) [scale: $scale]',
+                name: 'PrivateAgent',
+              );
+              x = nativeX;
+              y = nativeY;
+            }
+          }
+
           success = await _screenService.clickAt(x, y);
           actionResult = success ? 'Clicked at ($x, $y)' : 'Click failed';
           break;
@@ -746,7 +776,8 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
         sameActionCount = 1;
         screenUnchangedCount = 0;
         previousScreenContent = null;
-        visualGoalFulfilled = true; // Visual requirement or initial visual step fulfilled!
+        visualGoalFulfilled = true;
+        _lastScreenshotData = null;
         executedSteps.add(ActionStep(action: action, params: params));
 
         if (onDemandVisionActiveThisStep) {

@@ -2,6 +2,25 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
+/// Encapsulates downscaled screenshot base64 and resolution/scale metadata
+class ScreenshotData {
+  final String base64;
+  final int width;
+  final int height;
+  final int nativeWidth;
+  final int nativeHeight;
+  final double scale;
+
+  ScreenshotData({
+    required this.base64,
+    required this.width,
+    required this.height,
+    required this.nativeWidth,
+    required this.nativeHeight,
+    required this.scale,
+  });
+}
+
 /// Dart bridge to the native AccessibilityService.
 /// Provides screen reading, UI element interaction, and gesture control.
 class ScreenAutomationService {
@@ -94,15 +113,39 @@ class ScreenAutomationService {
     }
   }
 
-  /// Take a screenshot and return it as a Base64 encoded string.
-  /// Note: Requires Android 11 (API 30) or higher.
-  Future<String?> takeScreenshot() async {
+  /// Take a screenshot with in-memory downscaling & JPEG compression.
+  /// Returns metadata including width, height, nativeWidth, nativeHeight, scale, and base64 string.
+  Future<ScreenshotData?> takeScreenshotData({
+    int targetWidth = 720,
+    int quality = 75,
+  }) async {
     try {
-      final result = await _channel.invokeMethod<String>('takeScreenshot');
-      return result;
+      final res = await _channel.invokeMethod<Map>(
+        'takeScreenshot',
+        {
+          'targetWidth': targetWidth,
+          'quality': quality,
+        },
+      );
+      if (res == null) return null;
+      return ScreenshotData(
+        base64: res['base64'] as String? ?? '',
+        width: (res['width'] as num?)?.toInt() ?? 720,
+        height: (res['height'] as num?)?.toInt() ?? 1280,
+        nativeWidth: (res['nativeWidth'] as num?)?.toInt() ?? 1080,
+        nativeHeight: (res['nativeHeight'] as num?)?.toInt() ?? 2400,
+        scale: (res['scale'] as num?)?.toDouble() ?? 1.0,
+      );
     } catch (e) {
       return null;
     }
+  }
+
+  /// Take a screenshot and return it as a Base64 encoded string.
+  /// Backward-compatible helper returning downscaled Base64 string.
+  Future<String?> takeScreenshot() async {
+    final data = await takeScreenshotData();
+    return data?.base64;
   }
 
   /// Get a simplified text description of the current screen for the LLM

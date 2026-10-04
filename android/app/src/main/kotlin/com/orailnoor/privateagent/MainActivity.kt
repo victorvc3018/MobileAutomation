@@ -121,9 +121,11 @@ class MainActivity : FlutterActivity() {
                                 result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)
                             } else {
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                    service.takeScreenshot { base64 ->
-                                        if (base64 != null) {
-                                            result.success(base64)
+                                    val targetWidth = call.argument<Int>("targetWidth") ?: 720
+                                    val quality = call.argument<Int>("quality") ?: 75
+                                    service.takeScreenshot(targetWidth, quality) { dataMap ->
+                                        if (dataMap != null) {
+                                            result.success(dataMap)
                                         } else {
                                             result.error("SCREENSHOT_FAILED", "Failed to capture screenshot", null)
                                         }
