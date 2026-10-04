@@ -62,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _initServices() async {
     await _aiService.init();
+    _visionEnabled = AiService.isVisionSupported(_aiService.model) && _aiService.isVisionEnabled;
     await _notificationService.requestPermission();
     await _voiceService.init();
     await _telegramService.init();
@@ -119,7 +120,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Ephemeral screenshot capture for vision: deleted immediately after response
     String? screenshotBase64;
     final bool taskNeedsVision = TaskExecutor.taskRequiresVision(text.trim());
-    final bool canUseVision = _visionEnabled || (taskNeedsVision && AiService.isVisionSupported(_aiService.model));
+    final bool modelSupportsVision = AiService.isVisionSupported(_aiService.model);
+    final bool canUseVision = modelSupportsVision && (_visionEnabled || taskNeedsVision);
     if (canUseVision) {
       try {
         screenshotBase64 =
@@ -562,6 +564,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               );
               await _actionHandler.shizuku.checkAvailability();
+              if (!AiService.isVisionSupported(_aiService.model)) {
+                _visionEnabled = false;
+              }
               if (mounted) setState(() {});
             },
           ),
@@ -986,7 +991,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           Center(
             child: Text(
-              'PrivateAgent v1.0.9 (Vision on Demand)',
+              'PrivateAgent v1.0.10 (Single-Step Vision & Model Lock)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -1345,26 +1350,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           // Vision Toggle Button
           Tooltip(
-            message: _visionEnabled
-                ? (modelHasVision
+            message: !modelHasVision
+                ? 'Vision unavailable for "${_aiService.model}" (text-only)'
+                : (_visionEnabled
                     ? 'Vision Enabled (${_aiService.model})'
-                    : 'Vision ON (Model does not support vision, using text)')
-                : 'Vision Disabled (Tap to enable)',
+                    : 'Vision Disabled (Tap to enable)'),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _visionEnabled
-                    ? (modelHasVision
+                color: !modelHasVision
+                    ? (isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03))
+                    : (_visionEnabled
                         ? Theme.of(context).colorScheme.primary.withOpacity(0.18)
-                        : Colors.amber.withOpacity(0.18))
-                    : Theme.of(context).cardTheme.color,
+                        : Theme.of(context).cardTheme.color),
                 border: Border.all(
-                  color: _visionEnabled
-                      ? (modelHasVision
+                  color: !modelHasVision
+                      ? Theme.of(context).colorScheme.onSurface.withOpacity(0.04)
+                      : (_visionEnabled
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.amber)
-                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+                          : Theme.of(context).colorScheme.onSurface.withOpacity(0.08)),
                   width: 1.2,
                 ),
                 boxShadow: [
@@ -1383,37 +1388,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               child: IconButton(
                 icon: Icon(
-                  _visionEnabled
-                      ? (modelHasVision
+                  !modelHasVision
+                      ? Icons.visibility_off_outlined
+                      : (_visionEnabled
                           ? Icons.visibility_rounded
-                          : Icons.visibility_outlined)
-                      : Icons.visibility_off_outlined,
-                  color: _visionEnabled
-                      ? (modelHasVision
+                          : Icons.visibility_outlined),
+                  color: !modelHasVision
+                      ? Theme.of(context).colorScheme.onSurface.withOpacity(0.2)
+                      : (_visionEnabled
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.amber)
-                      : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                          : (isDark ? Colors.grey[500] : Colors.grey[400])),
                   size: 20,
                 ),
                 onPressed: _isLoading
                     ? null
                     : () async {
+                        if (!modelHasVision) {
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Vision is not supported by "${_aiService.model}". Switch to a multimodal model (e.g. Gemini, Claude, Space Bunny Alpha) in Settings.',
+                              ),
+                              duration: const Duration(seconds: 3),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
+
                         final newState = !_visionEnabled;
                         setState(() {
                           _visionEnabled = newState;
                         });
                         await _aiService.setVisionEnabled(newState);
                         if (!mounted) return;
-                        final supported =
-                            AiService.isVisionSupported(_aiService.model);
                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
                               newState
-                                  ? (supported
-                                      ? 'Vision mode enabled (${_aiService.model})'
-                                      : 'Vision toggled ON, but "${_aiService.model}" does not support vision. Text fallback will be used.')
+                                  ? 'Vision mode enabled for next task (${_aiService.model})'
                                   : 'Vision mode disabled (using screen hierarchy)',
                             ),
                             duration: const Duration(seconds: 2),

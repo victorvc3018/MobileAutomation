@@ -274,9 +274,15 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   int get maxTokens => _maxTokens;
   bool get useScreenCompression => _useScreenCompression;
   bool get useSystemPrompt => _useSystemPrompt;
-  bool get isVisionEnabled => _visionEnabled;
+  bool get isVisionEnabled => _visionEnabled && isVisionSupported(_model);
 
   Future<void> setVisionEnabled(bool enabled) async {
+    if (enabled && !isVisionSupported(_model)) {
+      _visionEnabled = false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('api_vision_enabled', false);
+      return;
+    }
     _visionEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('api_vision_enabled', enabled);
@@ -336,7 +342,8 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
           ? _conversationHistory.sublist(0, _conversationHistory.length - 1)
           : <Map<String, dynamic>>[];
 
-      final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+      final bool canSendImage = imageBase64 != null && imageBase64.isNotEmpty && isVisionSupported(_model);
+      final userContent = canSendImage
           ? [
               {'type': 'text', 'text': message},
               {
@@ -473,7 +480,8 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
           ? _conversationHistory.sublist(0, _conversationHistory.length - 1)
           : <Map<String, dynamic>>[];
 
-      final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+      final bool canSendImage = imageBase64 != null && imageBase64.isNotEmpty && isVisionSupported(_model);
+      final userContent = canSendImage
           ? [
               {'type': 'text', 'text': message},
               {
@@ -641,7 +649,8 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     while (true) {
       try {
         currentTry++;
-        final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+        final bool canSendImage = imageBase64 != null && imageBase64.isNotEmpty && isVisionSupported(_model);
+      final userContent = canSendImage
             ? [
                 {'type': 'text', 'text': prompt},
                 {

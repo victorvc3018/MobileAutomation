@@ -333,41 +333,42 @@ Rules:
       }
 
       // 2. Hybrid Vision-on-Demand:
-      // Dynamically activates vision when:
-      // - Already enabled manually (useVision || _aiService.isVisionEnabled)
-      // - The task intrinsically requires vision (e.g. "what's on my screen", "look at", "color", "picture")
-      // - The screen is unchanged after an action ("no new thing comes up")
-      // - The agent is stuck or previous action failed (consecutiveFailures > 0 or sameActionCount >= 2)
-      // - Accessibility tree has sparse/no text (canvas, game, video, camera, map)
+      // Vision activates ONLY when:
+      // - The selected model actually supports multimodal vision (strictly disabled for non-vision models)
+      // AND one of the following dynamic conditions is met:
+      //   a) Visual goal was explicitly requested and not yet fulfilled (step == 0 && (useVision || taskRequiresVision(userGoal)))
+      //   b) The screen is unchanged after the previous action ("no new thing comes up")
+      //   c) The agent is stuck or previous action failed (consecutiveFailures > 0 || sameActionCount >= 2)
+      //   d) Screen accessibility tree is completely unreadable/empty
+      //
+      // CRITICAL: Vision is strictly one-step-scoped! As soon as that step is fulfilled,
+      // vision immediately deactivates and does NOT stay on for the rest of the task.
       final bool modelCanVision = AiService.isVisionSupported(_aiService.model);
-      final bool taskNeedsVision = taskRequiresVision(userGoal);
-      final bool isStuckOrStagnant = consecutiveFailures > 0 || sameActionCount >= 2 || isScreenUnchanged;
-      final bool isSparseScreen = screenContent.trim().length < 80 ||
+      final bool taskNeedsVision = !visualGoalFulfilled &&
+          (taskRequiresVision(userGoal) || (step == 0 && useVision));
+      final bool isStuckOrStagnant =
+          consecutiveFailures > 0 || sameActionCount >= 2 || isScreenUnchanged;
+      final bool isUnreadableScreen = screenContent.trim().isEmpty ||
           screenContent.contains('Could not read screen');
 
       final bool shouldActivateVision = modelCanVision && (
-          useVision ||
-          _aiService.isVisionEnabled ||
           taskNeedsVision ||
           isStuckOrStagnant ||
-          isSparseScreen
+          isUnreadableScreen
       );
 
       String? screenshotBase64;
+      onDemandVisionActiveThisStep = shouldActivateVision;
+
       if (shouldActivateVision) {
-        final isManualVision = useVision || _aiService.isVisionEnabled;
-        if (!isManualVision) {
-          if (taskNeedsVision) {
-            _report('Step ${step + 1}: Visual goal detected -> activating Vision on-demand...');
-          } else if (isScreenUnchanged) {
-            _report('Step ${step + 1}: Screen unchanged -> activating Vision to inspect...');
-          } else if (consecutiveFailures > 0 || sameActionCount >= 2) {
-            _report('Step ${step + 1}: Action stuck -> activating Vision to diagnose...');
-          } else if (isSparseScreen) {
-            _report('Step ${step + 1}: No text elements detected -> activating Vision...');
-          }
-        } else {
-          _report('Step ${step + 1}: Looking at screen (Vision)...');
+        if (taskNeedsVision) {
+          _report('Step ${step + 1}: Visual goal inspection -> Activating Vision for this step...');
+        } else if (isScreenUnchanged) {
+          _report('Step ${step + 1}: Screen unchanged -> Activating Vision on-demand to inspect...');
+        } else if (consecutiveFailures > 0 || sameActionCount >= 2) {
+          _report('Step ${step + 1}: Action stuck -> Activating Vision on-demand to diagnose...');
+        } else if (isUnreadableScreen) {
+          _report('Step ${step + 1}: Unreadable screen elements -> Activating Vision on-demand...');
         }
 
         try {
@@ -737,9 +738,23 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
         results.add('Recovery step: ${recovery.description}');
         continue;
       } else {
+        // Step succeeded and was fulfilled!
         consecutiveFailures = 0;
         lastFailedAction = '';
+        sameActionCount = 1;
+        screenUnchangedCount = 0;
+        previousScreenContent = null;
+        visualGoalFulfilled = true; // Visual requirement or initial visual step fulfilled!
         executedSteps.add(ActionStep(action: action, params: params));
+
+        if (onDemandVisionActiveThisStep) {
+          developer.log(
+            'Step ${step + 1}: Vision step fulfilled -> Deactivating vision for subsequent steps.',
+            name: 'PrivateAgent',
+          );
+          _report('Step ${step + 1}: Action succeeded -> Visual step fulfilled, returning to fast screen hierarchy.');
+          onDemandVisionActiveThisStep = false;
+        }
       }
 
       results.add('Step ${step + 1}: $actionResult ($reasoning)');

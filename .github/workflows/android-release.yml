@@ -63,17 +63,15 @@ jobs:
           body: |
             ## 📱 PrivateAgent Mobile Automation Release
 
-            ### What's New in v1.0.9:
-            - 👁️ **Hybrid Vision-on-Demand**: Vision automatically activates on-demand whenever the agent gets stuck, when an action fails, when the screen content does not change, when the UI is sparse (games, canvases, video), or when the task naturally requests visual understanding.
-            - ⚡ **Adaptive Event-Driven Settling**: Replaced fixed 1-3 second sleep timers with real-time Android accessibility event monitoring.
-            - ⚡ **Adaptive Event-Driven Settling**: Replaced fixed 1-3 second sleep timers with real-time Android accessibility event monitoring. Steps advance as soon as UI animations and content settle (often in 200-300ms), speeding up automation up to 3x.
-            - 🐰 **Full OpenRouter Space Bunny Support**: Multimodal vision enabled for stealth/space-bunny-alpha and stealth models.
-            - 🐰 **Full OpenRouter Space Bunny Support**: Native multimodal vision enabled for stealth/space-bunny-alpha, union-alpha, qvq, and all stealth/VL models.
-            - 👁️ **Forced Vision Toggle**: Toggling Vision ON now captures and forwards screenshots regardless of client model name whitelist.
-            - 👁️ **Vision Mode Toggle**: Toggle between visual screen understanding (multimodal screenshots) and accessibility hierarchy text dumps.
+            ### What's New in v1.0.10:
+            - 🛑 **Single-Step Vision Deactivation**: When vision activates on-demand (when stuck, screen unchanged, or requested for visual inspection), it runs strictly for that specific step. The moment that step is fulfilled/executed, vision immediately turns off and does NOT stay on for the rest of the task, reverting to fast, low-token accessibility text.
+            - 🔒 **Total Non-Vision Model Lockout**: Vision is strictly disabled and blocked for models that do not support it (e.g. DeepSeek-Chat, GLM-5.2, Llama 3.3, Mistral, GPT-3.5). The UI eye icon is locked/greyed with feedback toast, settings switch is disabled, and the network layer guarantees no image payloads are dispatched to text-only endpoints.
+            - 👁️ **Hybrid Vision-on-Demand**: Vision automatically activates on-demand whenever the agent gets stuck, when an action fails, when the screen content does not change, or when the task naturally requests visual understanding.
+            - ⚡ **Adaptive Event-Driven Settling**: Steps advance as soon as Android UI animations and content settle (often in 200-300ms), speeding up automation up to 3x.
+            - 🐰 **Full OpenRouter Space Bunny Support**: Multimodal vision enabled for stealth/space-bunny-alpha, union-alpha, qvq, and all stealth/VL models.
             - 🔒 **Zero Data Retention**: Ephemeral in-memory screen analysis - screenshots are analyzed and discarded immediately.
             - 🔇 **Silent Operation**: Text-to-Speech (TTS) fully disabled for quiet background automation.
-            - 🏷️ **Version Badge**: Explicitly shows 'v1.0.6' in Settings and the Side Drawer so you know you're running the right build.
+            - 🏷️ **Version Badge**: Explicitly shows 'v1.0.10' in Settings and the Side Drawer.
 
             ### 📲 Direct APK Downloads for your Android Phone:
             - **[Download ARM64 APK (Recommended for Pixel 7 & Modern Phones)](https://github.com/${{ github.repository }}/releases/download/${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}/app-arm64-v8a-release.apk)**

@@ -1016,15 +1016,17 @@ class _SettingsScreenState extends State<SettingsScreen>
                 subtitle: Text(
                   AiService.isVisionSupported(_modelController.text.trim())
                       ? 'Uses screenshots for visual screen understanding (${_modelController.text.trim()})'
-                      : 'Currently selected model does not support vision (falls back to text dump)',
+                      : 'Unavailable: "${_modelController.text.trim()}" is a text-only model and does not support vision.',
                 ),
-                value: _visionEnabled,
-                onChanged: (bool value) async {
-                  setState(() {
-                    _visionEnabled = value;
-                  });
-                  await widget.aiService.setVisionEnabled(value);
-                },
+                value: AiService.isVisionSupported(_modelController.text.trim()) && _visionEnabled,
+                onChanged: AiService.isVisionSupported(_modelController.text.trim())
+                    ? (bool value) async {
+                        setState(() {
+                          _visionEnabled = value;
+                        });
+                        await widget.aiService.setVisionEnabled(value);
+                      }
+                    : null,
                 contentPadding: EdgeInsets.zero,
               ),
               SwitchListTile(
@@ -1187,7 +1189,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Version'),
-                  subtitle: const Text('1.0.9 (Build 2029) - Hybrid Vision-on-Demand & Adaptive Settling'),
+                  subtitle: const Text('1.0.10 (Build 2030) - Single-Step Vision Deactivation & Model Lock'),
                   leading: const Icon(Icons.verified_rounded, color: Colors.indigoAccent),
                 ),
                 ListTile(
