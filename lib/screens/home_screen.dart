@@ -984,7 +984,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           Center(
             child: Text(
-              'PrivateAgent v1.0.7 (Vision Enabled)',
+              'PrivateAgent v1.0.8 (Adaptive Settling & Vision)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

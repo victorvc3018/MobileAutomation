@@ -186,11 +186,11 @@ Rules:
           final appName = step.params['app_name'] as String? ?? '';
           final res = await _appLauncher.openApp(appName);
           success = res.startsWith('Opened');
-          await Future.delayed(const Duration(milliseconds: 3000));
+          await _screenService.waitForScreenSettle(maxWaitMs: 3000, quietPeriodMs: 350);
         } else if (step.action == 'click_text') {
           final text = step.params['text'] as String? ?? '';
           success = await _screenService.clickByText(text);
-          await Future.delayed(const Duration(milliseconds: 1500));
+          await _screenService.waitForScreenSettle(maxWaitMs: 1500, quietPeriodMs: 200);
         }
 
         if (success) {
@@ -207,7 +207,7 @@ Rules:
       if (currentPkg == 'com.orailnoor.privateagent') {
         _report('Moving to background...');
         await _screenService.pressHome();
-        await Future.delayed(const Duration(milliseconds: 1500));
+        await _screenService.waitForScreenSettle(maxWaitMs: 1500, quietPeriodMs: 200);
       }
     }
 
@@ -231,19 +231,25 @@ Rules:
         return 'Task cancelled.';
       }
 
-      // Adaptive delay: give Android apps time to transition screens, load data, or open keyboards
-      int delay = 1200; // Default 1.2s delay for most actions
+            // Adaptive event-driven screen settling:
+      // Dynamically monitors real-time Android accessibility events until UI animations and content settle,
+      // avoiding fixed blind sleep timers.
+      int maxWait = 1500;
+      int quietPeriod = 200;
       if (lastAction == 'open_app') {
-        delay = 3000; // Apps need ~3 seconds to fully cold-start and render
+        maxWait = 3000;
+        quietPeriod = 350;
       } else if (lastAction == 'type_text') {
-        delay =
-            2000; // Typing involves keyboards and often triggers heavy network requests (search)
+        maxWait = 1800;
+        quietPeriod = 250;
       } else if (lastAction == 'click_text' || lastAction == 'click_at') {
-        delay = 1500; // Clicking usually triggers a screen transition
+        maxWait = 1500;
+        quietPeriod = 200;
       } else if (lastAction == 'scroll') {
-        delay = 1000; // Scrolling is relatively fast
+        maxWait = 800;
+        quietPeriod = 150;
       }
-      await Future.delayed(Duration(milliseconds: delay));
+      await _screenService.waitForScreenSettle(maxWaitMs: maxWait, quietPeriodMs: quietPeriod);
 
       // 1. Read the current screen text
       final screenContent = _aiService.useScreenCompression
@@ -750,18 +756,23 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
       final step = skill.steps[i];
       _report('Replaying step ${i + 1}/${skill.steps.length}: ${step.action}');
 
-      // Delay before executing each step
-      int delay = 1200;
-      if (step.action == 'open_app')
-        delay = 3000;
-      else if (step.action == 'type_text')
-        delay = 2000;
-      else if (step.action == 'click_text' || step.action == 'click_at')
-        delay = 1500;
-      else if (step.action == 'scroll')
-        delay = 1000;
-
-      await Future.delayed(Duration(milliseconds: delay));
+            // Adaptive event-driven screen settling
+      int maxWait = 1500;
+      int quietPeriod = 200;
+      if (step.action == 'open_app') {
+        maxWait = 3000;
+        quietPeriod = 350;
+      } else if (step.action == 'type_text') {
+        maxWait = 1800;
+        quietPeriod = 250;
+      } else if (step.action == 'click_text' || step.action == 'click_at') {
+        maxWait = 1500;
+        quietPeriod = 200;
+      } else if (step.action == 'scroll') {
+        maxWait = 800;
+        quietPeriod = 150;
+      }
+      await _screenService.waitForScreenSettle(maxWaitMs: maxWait, quietPeriodMs: quietPeriod);
 
       bool success = false;
       String actionResult = '';

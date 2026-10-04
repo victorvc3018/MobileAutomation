@@ -99,7 +99,23 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
-                        "takeScreenshot" -> {
+                        "waitForScreenSettle" -> {
+                            val service = AgentAccessibilityService.instance
+                            val maxWaitMs = (call.argument<Int>("maxWaitMs") ?: 1500).toLong()
+                            val quietPeriodMs = (call.argument<Int>("quietPeriodMs") ?: 250).toLong()
+                            if (service != null) {
+                                java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+                                    val settled = service.waitForScreenSettle(maxWaitMs, quietPeriodMs)
+                                    runOnUiThread {
+                                        result.success(settled)
+                                    }
+                                }
+                            } else {
+                                result.success(false)
+                            }
+                        }
+
+"takeScreenshot" -> {
                             val service = AgentAccessibilityService.instance
                             if (service == null) {
                                 result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)

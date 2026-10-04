@@ -69,6 +69,31 @@ class ScreenAutomationService {
     }
   }
 
+  /// Adaptively waits for the screen to settle after an action or app launch.
+  /// Uses real-time accessibility event monitoring rather than blind sleep timers.
+  /// Returns true if the screen settled before maxWaitMs, or false if it timed out.
+  Future<bool> waitForScreenSettle({
+    int maxWaitMs = 1500,
+    int quietPeriodMs = 250,
+  }) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('waitForScreenSettle', {
+        'maxWaitMs': maxWaitMs,
+        'quietPeriodMs': quietPeriodMs,
+      }).timeout(
+        Duration(milliseconds: maxWaitMs + 600),
+        onTimeout: () => false,
+      );
+      if (res != true) {
+        await Future.delayed(Duration(milliseconds: quietPeriodMs));
+      }
+      return res ?? false;
+    } catch (_) {
+      await Future.delayed(Duration(milliseconds: quietPeriodMs));
+      return false;
+    }
+  }
+
   /// Take a screenshot and return it as a Base64 encoded string.
   /// Note: Requires Android 11 (API 30) or higher.
   Future<String?> takeScreenshot() async {

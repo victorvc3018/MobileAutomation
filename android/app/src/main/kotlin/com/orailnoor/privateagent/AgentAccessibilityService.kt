@@ -30,17 +30,25 @@ class AgentAccessibilityService : AccessibilityService() {
         fun isRunning(): Boolean = instance != null
     }
 
+    @Volatile
+    var lastEventTimestamp: Long = android.os.SystemClock.uptimeMillis()
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        lastEventTimestamp = android.os.SystemClock.uptimeMillis()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        val listener = eventListener ?: return
-        
-        // Filter out events from our own app so we don't record the Stop Overlay button clicks
+
+        // Filter out events from our own app so we don't record the Stop Overlay button clicks or internal UI
         if (event.packageName?.toString() == "com.orailnoor.privateagent") return
+
+        // Record real-time OS event timestamp for adaptive settling detection
+        lastEventTimestamp = android.os.SystemClock.uptimeMillis()
+
+        val listener = eventListener ?: return
         
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
@@ -72,6 +80,36 @@ class AgentAccessibilityService : AccessibilityService() {
                 listener(map)
             }
         }
+    }
+
+    /**
+     * Adaptively waits until UI events have quieted down (screen settled)
+     * or maximum timeout is reached.
+     */
+    fun waitForScreenSettle(maxWaitMs: Long, quietPeriodMs: Long): Boolean {
+        val initialGraceMs = 80L
+        val startTime = android.os.SystemClock.uptimeMillis()
+        val deadline = startTime + maxWaitMs
+
+        try {
+            Thread.sleep(initialGraceMs)
+        } catch (_: InterruptedException) {
+            return false
+        }
+
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            val now = android.os.SystemClock.uptimeMillis()
+            val quietDuration = now - lastEventTimestamp
+            if (quietDuration >= quietPeriodMs) {
+                return true
+            }
+            try {
+                Thread.sleep(25L)
+            } catch (_: InterruptedException) {
+                return false
+            }
+        }
+        return false
     }
 
     override fun onInterrupt() {}

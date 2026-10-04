@@ -1187,7 +1187,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Version'),
-                  subtitle: const Text('1.0.7 (Build 2027) - Space Bunny & Multimodal Support'),
+                  subtitle: const Text('1.0.8 (Build 2028) - Adaptive Settling & Space Bunny Vision'),
                   leading: const Icon(Icons.verified_rounded, color: Colors.indigoAccent),
                 ),
                 ListTile(
