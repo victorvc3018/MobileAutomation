@@ -106,7 +106,7 @@ class MainActivity : FlutterActivity() {
                             if (service != null) {
                                 java.util.concurrent.Executors.newSingleThreadExecutor().execute {
                                     val settled = service.waitForScreenSettle(maxWaitMs, quietPeriodMs)
-                                    runOnUiThread {
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
                                         result.success(settled)
                                     }
                                 }
