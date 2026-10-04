@@ -32,6 +32,8 @@ class TaskExecutor {
 
   /// Set to true to cancel the running task
   bool _cancelled = false;
+  bool visualGoalFulfilled = false;
+  bool onDemandVisionActiveThisStep = false;
   Completer<void>? _cancelCompleter;
 
   TaskExecutor({
