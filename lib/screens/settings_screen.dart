@@ -45,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   double _temperature = 1.0;
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
+  bool _visionEnabled = false;
   bool _floatingIconEnabled = false;
   bool _isOverlayPermissionGranted = false;
 
@@ -69,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
     _useScreenCompression = widget.aiService.useScreenCompression;
     _useSystemPrompt = widget.aiService.useSystemPrompt;
+    _visionEnabled = widget.aiService.isVisionEnabled;
 
     // Auto-save listeners
     _apiKeyController.addListener(_autoSave);
@@ -1010,6 +1012,22 @@ class _SettingsScreenState extends State<SettingsScreen>
             isDark: isDark,
             children: [
               SwitchListTile(
+                title: const Text('Vision Mode (Multimodal)'),
+                subtitle: Text(
+                  AiService.isVisionSupported(_modelController.text.trim())
+                      ? 'Uses screenshots for visual screen understanding (${_modelController.text.trim()})'
+                      : 'Currently selected model does not support vision (falls back to text dump)',
+                ),
+                value: _visionEnabled,
+                onChanged: (bool value) async {
+                  setState(() {
+                    _visionEnabled = value;
+                  });
+                  await widget.aiService.setVisionEnabled(value);
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+              SwitchListTile(
                 title: const Text('Use Screen Compression'),
                 subtitle: const Text(
                   'Removes duplicate elements to save tokens',
@@ -1168,7 +1186,13 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Project Repository'),
+                title: const Text('Version'),
+                  subtitle: const Text('1.0.6 (Build 2026) - Vision Mode & Silent TTS'),
+                  leading: const Icon(Icons.verified_rounded, color: Colors.indigoAccent),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Project Repository'),
                 subtitle: const Text('View source code on GitHub'),
                 leading: const Icon(Icons.code_rounded),
                 onTap: () {

@@ -983,7 +983,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               );
             },
           ),
-          const SizedBox(height: 20),
+          Center(
+            child: Text(
+              'PrivateAgent v1.0.6 (Vision Enabled)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
