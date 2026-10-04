@@ -27,6 +27,9 @@ class TaskExecutor {
   /// Callback to report progress messages to the UI
   final void Function(String message)? onProgress;
 
+  /// Whether vision mode is enabled for this task
+  final bool useVision;
+
   /// Set to true to cancel the running task
   bool _cancelled = false;
   Completer<void>? _cancelCompleter;
@@ -37,6 +40,7 @@ class TaskExecutor {
     required AppLauncherService appLauncher,
     required ShizukuService shizukuService,
     this.onProgress,
+    this.useVision = false,
   }) : _aiService = aiService,
        _screenService = screenService,
        _appLauncher = appLauncher,
@@ -76,9 +80,9 @@ Available actions:
 - done: {} - Task is complete
 
 Rules:
-- You will receive a TEXT DUMP of the accessibility tree containing exact text strings and center coordinates.
-- ALWAYS use the text dump to decide your next action.
-- If you need to click something, prefer using `click_text`. If the element does not have text, use `click_at` with the coordinates provided in the text dump.
+- You will receive the screen content (via image if vision is active, and/or an accessibility text dump containing text and coordinates).
+- When vision is active, analyze the screen image to locate icons, buttons, input fields, and visual UI components.
+- If you need to click something, prefer using `click_text` with visible text. If the element does not have text (e.g. icon button, media player control), use `click_at` with screen coordinates.
 - When typing in a search box, you MUST click it first, wait a step, and THEN type.
 - After typing a search query, use `press_enter` once. If the screen does not change, click the exact visible suggestion text. Do not repeat the same submit action more than twice.
 - Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead of continuing to browse indefinitely.
@@ -262,27 +266,64 @@ Rules:
             '\n\nWARNING: You have failed $consecutiveFailures times in a row with the same approach. You MUST try a completely different action. If open_app failed, try press_home and look for the app icon on the home screen instead. If click_text failed, use click_at with coordinates. Do NOT repeat the same failed action.';
       }
 
-      // 2. Build the prompt (system prompt is sent separately via sendTaskMessage)
-      final prompt =
-          '''TASK: $userGoal
+            // 2. Check vision capability & capture ephemeral screenshot if enabled
+      String? screenshotBase64;
+      final bool canUseVision = (useVision || _aiService.isVisionEnabled) &&
+          _aiService.isVisionSupported(_aiService.model);
+
+      if (canUseVision) {
+        _report('Step ${step + 1}: Looking at screen (Vision)...');
+        try {
+          screenshotBase64 = await _screenService.takeScreenshot();
+          if (screenshotBase64 != null) {
+            developer.log(
+              'Step ${step + 1}: Captured screenshot (${screenshotBase64.length} chars)',
+              name: 'PrivateAgent',
+            );
+          }
+        } catch (e) {
+          developer.log('Screenshot capture error: $e', name: 'PrivateAgent');
+        }
+      }
+
+      // Build the prompt (system prompt is sent separately via sendTaskMessage)
+      final String prompt;
+      if (screenshotBase64 != null) {
+        prompt =
+            '''TASK: $userGoal
+
+CURRENT SCREEN:
+I have attached the screenshot of the current screen for visual understanding.${screenContent.isNotEmpty ? '\n\nTEXT DUMP REFERENCE:\n$screenContent' : ''}$prevResultStr$failureHint
+Step ${step + 1}/${_aiService.maxSteps}. Look at the screen image and determine the next action to take to accomplish the task.''';
+      } else {
+        prompt =
+            '''TASK: $userGoal
 
 CURRENT SCREEN TEXT DUMP:
 $screenContent$prevResultStr$failureHint
 Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. What is the next action?''';
+      }
 
-      developer.log('=== AI PROMPT ===\n$prompt', name: 'PrivateAgent');
+      developer.log('=== AI PROMPT (Vision: ${screenshotBase64 != null}) ===\n$prompt', name: 'PrivateAgent');
 
       // 3. Get AI response — races against cancel signal so Stop works immediately
       String response;
       try {
         _cancelCompleter = Completer<void>();
-        final aiFuture = _aiService.sendTaskMessage(_taskSystemPrompt, prompt);
+        final aiFuture = _aiService.sendTaskMessage(
+          _taskSystemPrompt,
+          prompt,
+          imageBase64: screenshotBase64,
+        );
 
         // Race: whichever finishes first wins
         final result = await Future.any([
           aiFuture.then((r) => r),
           _cancelCompleter!.future.then((_) => null),
         ]);
+
+        // Immediately delete/discard the ephemeral screenshot from memory
+        screenshotBase64 = null;
 
         if (result == null || _cancelled) {
           results.add('Task cancelled by user.');
@@ -311,6 +352,7 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           name: 'PrivateAgent',
         );
       } catch (e) {
+        screenshotBase64 = null;
         if (_cancelled) {
           results.add('Task cancelled by user.');
           _report('Task cancelled.');

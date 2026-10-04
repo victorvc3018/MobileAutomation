@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isListening = false;
+  bool _visionEnabled = false;
 
   // Custom switch state: 'chat' or 'agent'
   String _mode = 'chat';
@@ -114,10 +115,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     final assistantIndex = _messages.length - 1;
 
+    // Ephemeral screenshot capture for vision: deleted immediately after response
+    String? screenshotBase64;
+    final bool canUseVision =
+        _visionEnabled && _aiService.isVisionSupported(_aiService.model);
+    if (canUseVision) {
+      try {
+        screenshotBase64 =
+            await _actionHandler.screenAutomation.takeScreenshot();
+      } catch (e) {
+        developer.log('Screen capture failed: $e', name: 'HomeScreen');
+      }
+    }
+
     try {
       final isAgent = _mode == 'agent';
       final stream = _aiService
-          .sendMessageStream(text.trim(), isAgentMode: isAgent)
+          .sendMessageStream(
+            text.trim(),
+            isAgentMode: isAgent,
+            imageBase64: screenshotBase64,
+          )
           .timeout(
             const Duration(seconds: 90),
             onTimeout: (sink) {
@@ -144,6 +162,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
       }
       await _saveSession();
+      // Immediately delete/discard ephemeral screenshot
+      screenshotBase64 = null;
 
       // Check if it's an action
       final action = _aiService.parseAction(accumulated);
@@ -160,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final result = await _actionHandler.execute(
           action,
           aiService: _aiService,
+          useVision: _visionEnabled,
           onProgress: (msg) {
             developer.log('Task progress: $msg', name: 'PrivateAgent');
             _sendOverlayEvent('OVERLAY_PROGRESS', msg);
@@ -206,10 +227,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
         await _saveSession();
       } else {
-        // Plain text response, we already rendered it, just speak it
-        _voiceService.speak(accumulated);
+        // Plain text response rendered. Text-to-Speech is disabled completely.
+        // _voiceService.speak(accumulated);
       }
     } catch (e) {
+      screenshotBase64 = null;
       if (mounted) {
         setState(() {
           if (_messages.isNotEmpty && _messages.length > assistantIndex) {
@@ -1305,7 +1327,89 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _isLoading ? null : _toggleVoice,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+
+          // Vision Toggle Button
+          Tooltip(
+            message: _visionEnabled
+                ? (_aiService.isVisionSupported(_aiService.model)
+                    ? 'Vision Enabled (${_aiService.model})'
+                    : 'Vision ON (Model does not support vision, using text)')
+                : 'Vision Disabled (Tap to enable)',
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _visionEnabled
+                    ? (_aiService.isVisionSupported(_aiService.model)
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.18)
+                        : Colors.amber.withOpacity(0.18))
+                    : Theme.of(context).cardTheme.color,
+                border: Border.all(
+                  color: _visionEnabled
+                      ? (_aiService.isVisionSupported(_aiService.model)
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.amber)
+                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                  if (_visionEnabled && _aiService.isVisionSupported(_aiService.model))
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                ],
+              ),
+              child: IconButton(
+                icon: Icon(
+                  _visionEnabled
+                      ? (_aiService.isVisionSupported(_aiService.model)
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_outlined)
+                      : Icons.visibility_off_outlined,
+                  color: _visionEnabled
+                      ? (_aiService.isVisionSupported(_aiService.model)
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.amber)
+                      : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                  size: 20,
+                ),
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final newState = !_visionEnabled;
+                        setState(() {
+                          _visionEnabled = newState;
+                        });
+                        await _aiService.setVisionEnabled(newState);
+                        if (!mounted) return;
+                        final supported = _aiService.isVisionSupported(_aiService.model);
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              newState
+                                  ? (supported
+                                      ? 'Vision mode enabled (${_aiService.model})'
+                                      : 'Vision toggled ON, but "${_aiService.model}" does not support vision. Text fallback will be used.')
+                                  : 'Vision mode disabled (using screen hierarchy)',
+                            ),
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
 
           // Custom Text input container
           Expanded(

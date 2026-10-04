@@ -45,4 +45,34 @@ void main() {
     expect(models[1], 'gemini-1.5-pro');
     expect(models[2], 'gemini-2.0-flash');
   });
+  test('correctly detects models supporting vision', () {
+    // Gemini models
+    expect(AiService.isVisionSupported('gemini-2.0-flash'), isTrue);
+    expect(AiService.isVisionSupported('gemini-1.5-pro'), isTrue);
+    expect(AiService.isVisionSupported('google/gemini-2.5-flash'), isTrue);
+
+    // OpenAI multimodal
+    expect(AiService.isVisionSupported('gpt-4o'), isTrue);
+    expect(AiService.isVisionSupported('gpt-4o-mini'), isTrue);
+    expect(AiService.isVisionSupported('gpt-4-turbo'), isTrue);
+    expect(AiService.isVisionSupported('o1'), isTrue);
+
+    // Claude multimodal
+    expect(AiService.isVisionSupported('claude-3-5-sonnet-20241022'), isTrue);
+    expect(AiService.isVisionSupported('claude-3-7-sonnet'), isTrue);
+    expect(AiService.isVisionSupported('claude-3-haiku'), isTrue);
+
+    // Open source / OpenRouter vision flags
+    expect(AiService.isVisionSupported('qwen/qwen-2-vl-72b-instruct'), isTrue);
+    expect(AiService.isVisionSupported('meta-llama/llama-3.2-11b-vision-instruct'), isTrue);
+    expect(AiService.isVisionSupported('mistralai/pixtral-12b'), isTrue);
+
+    // Text-only models return false
+    expect(AiService.isVisionSupported('deepseek-chat'), isFalse);
+    expect(AiService.isVisionSupported('deepseek-coder'), isFalse);
+    expect(AiService.isVisionSupported('deepseek-ai/deepseek-v4-flash'), isFalse);
+    expect(AiService.isVisionSupported('z-ai/glm-5.2'), isFalse);
+    expect(AiService.isVisionSupported('meta/llama-3.3-70b-instruct'), isFalse);
+    expect(AiService.isVisionSupported('mistralai/mistral-nemotron'), isFalse);
+  });
 }

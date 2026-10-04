@@ -19,11 +19,7 @@ class VoiceService {
       },
     );
 
-    // Configure TTS
-    await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(0.5);
-    await _tts.setVolume(1.0);
-    await _tts.setPitch(1.0);
+    // Note: TTS is disabled throughout the app per user requirements.
   }
 
   /// Start listening for speech. Returns transcribed text via callback.
@@ -57,15 +53,15 @@ class VoiceService {
     await _speech.stop();
   }
 
-  /// Speak text aloud
+  /// Speak text aloud - disabled completely
   Future<void> speak(String text) async {
-    if (text.isEmpty) return;
-    await _tts.speak(text);
+    // Text-to-Speech is disabled in this application.
+    return;
   }
 
   /// Stop speaking
   Future<void> stopSpeaking() async {
-    await _tts.stop();
+    return;
   }
 
   void dispose() {

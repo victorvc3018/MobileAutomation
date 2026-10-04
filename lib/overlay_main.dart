@@ -231,6 +231,7 @@ class _OverlayAppState extends State<OverlayApp> {
         screenService: _screenService,
         appLauncher: _appLauncher,
         shizukuService: _shizukuService,
+        useVision: _aiService.isVisionEnabled,
         onProgress: (msg) {
           log("Overlay Task Progress: $msg");
           if (mounted) {

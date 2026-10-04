@@ -19,6 +19,45 @@ class AiService {
   static const String googleBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
   static const String googleDefaultModel = 'gemini-2.0-flash';
 
+  /// Checks if the given model supports vision (multimodal image input).
+  static bool isVisionSupported(String model) {
+    final m = model.toLowerCase();
+    // Google Gemini models all support vision
+    if (m.contains('gemini')) return true;
+
+    // OpenAI multimodal models
+    if (m.contains('gpt-4o') ||
+        m.contains('gpt-4-turbo') ||
+        m.contains('gpt-4-vision') ||
+        m.contains('gpt-4.5') ||
+        m.contains('o1') ||
+        m.contains('o3')) {
+      return true;
+    }
+
+    // Anthropic Claude 3 / 3.5 / 3.7
+    if (m.contains('claude-3') ||
+        m.contains('claude-3.5') ||
+        m.contains('claude-3.7') ||
+        m.contains('claude-3-5') ||
+        m.contains('claude-3-7')) {
+      return true;
+    }
+
+    // Vision-language flags across open-source / OpenRouter
+    if (m.contains('-vl') ||
+        m.contains('_vl') ||
+        m.contains('vision') ||
+        m.contains('pixtral') ||
+        m.contains('llava') ||
+        m.contains('neva') ||
+        m.contains('fuyu') ||
+        m.contains('minicpm-v')) {
+      return true;
+    }
+
+    return false;
+  }
   static int compareGoogleModels(String a, String b) {
     int rank(String m) {
       final l = m.toLowerCase();
@@ -87,6 +126,7 @@ class AiService {
   int _maxTokens = 1024;
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
+  bool _visionEnabled = false;
   final List<Map<String, String>> _conversationHistory = [];
 
   static const String _systemPrompt = '''
@@ -146,6 +186,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     _maxTokens = prefs.getInt('api_max_tokens') ?? 1024;
     _useScreenCompression = prefs.getBool('api_use_screen_compression') ?? true;
     _useSystemPrompt = prefs.getBool('api_use_system_prompt') ?? true;
+    _visionEnabled = prefs.getBool('api_vision_enabled') ?? false;
   }
 
   Future<void> saveSettings({
@@ -214,6 +255,13 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   int get maxTokens => _maxTokens;
   bool get useScreenCompression => _useScreenCompression;
   bool get useSystemPrompt => _useSystemPrompt;
+  bool get isVisionEnabled => _visionEnabled;
+
+  Future<void> setVisionEnabled(bool enabled) async {
+    _visionEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('api_vision_enabled', enabled);
+  }
 
   int get _effectiveMaxTokens {
     // GLM is a reasoning model. With the app's 1,024-token default it can
@@ -238,7 +286,11 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   }
 
   /// Send a message to the AI and get a response.
-  Future<String> sendMessage(String message, {bool isAgentMode = true}) async {
+  Future<String> sendMessage(
+    String message, {
+    bool isAgentMode = true,
+    String? imageBase64,
+  }) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
     }
@@ -261,9 +313,26 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     try {
       // Build the prompt including system instructions
       final systemPrompt = isAgentMode ? _systemPrompt : _chatSystemPrompt;
-      final messages = [
+      final historyList = _conversationHistory.length > 1
+          ? _conversationHistory.sublist(0, _conversationHistory.length - 1)
+          : <Map<String, dynamic>>[];
+
+      final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+          ? [
+              {'type': 'text', 'text': message},
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/jpeg;base64,$imageBase64',
+                },
+              },
+            ]
+          : message;
+
+      final messages = <Map<String, dynamic>>[
         if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
-        ..._conversationHistory,
+        ...historyList,
+        {'role': 'user', 'content': userContent},
       ];
 
       String requestUrl = _baseUrl;
@@ -360,6 +429,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   Stream<String> sendMessageStream(
     String message, {
     bool isAgentMode = true,
+    String? imageBase64,
   }) async* {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
@@ -380,9 +450,26 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
 
     try {
       final systemPrompt = isAgentMode ? _systemPrompt : _chatSystemPrompt;
-      final messages = [
+      final historyList = _conversationHistory.length > 1
+          ? _conversationHistory.sublist(0, _conversationHistory.length - 1)
+          : <Map<String, dynamic>>[];
+
+      final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+          ? [
+              {'type': 'text', 'text': message},
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/jpeg;base64,$imageBase64',
+                },
+              },
+            ]
+          : message;
+
+      final messages = <Map<String, dynamic>>[
         if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
-        ..._conversationHistory,
+        ...historyList,
+        {'role': 'user', 'content': userContent},
       ];
 
       String requestUrl = _baseUrl;
@@ -513,7 +600,11 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
 
   /// Send a task execution message — no conversation history, low temperature, limited tokens.
   /// This is much faster and cheaper than sendMessage.
-  Future<AiResponse> sendTaskMessage(String systemPrompt, String prompt) async {
+  Future<AiResponse> sendTaskMessage(
+    String systemPrompt,
+    String prompt, {
+    String? imageBase64,
+  }) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
     }
@@ -531,9 +622,21 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     while (true) {
       try {
         currentTry++;
-        final messages = [
+        final userContent = (imageBase64 != null && imageBase64.isNotEmpty)
+            ? [
+                {'type': 'text', 'text': prompt},
+                {
+                  'type': 'image_url',
+                  'image_url': {
+                    'url': 'data:image/jpeg;base64,$imageBase64',
+                  },
+                },
+              ]
+            : prompt;
+
+        final messages = <Map<String, dynamic>>[
           if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
-          {'role': 'user', 'content': prompt},
+          {'role': 'user', 'content': userContent},
         ];
 
         String requestUrl = _baseUrl;

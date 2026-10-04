@@ -30,6 +30,7 @@ class ActionHandler {
     AgentAction action, {
     AiService? aiService,
     void Function(String)? onProgress,
+    bool useVision = false,
   }) async {
     try {
       String result;
@@ -158,6 +159,7 @@ class ActionHandler {
             appLauncher: _appLauncher,
             shizukuService: _shizuku,
             onProgress: onProgress,
+            useVision: useVision,
           );
           result = await _currentExecutor!.executeTask(goal);
           _currentExecutor = null;
