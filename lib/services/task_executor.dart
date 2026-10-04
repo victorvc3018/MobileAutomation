@@ -269,7 +269,7 @@ Rules:
             // 2. Check vision capability & capture ephemeral screenshot if enabled
       String? screenshotBase64;
       final bool canUseVision = (useVision || _aiService.isVisionEnabled) &&
-          _aiService.isVisionSupported(_aiService.model);
+          AiService.isVisionSupported(_aiService.model);
 
       if (canUseVision) {
         _report('Step ${step + 1}: Looking at screen (Vision)...');

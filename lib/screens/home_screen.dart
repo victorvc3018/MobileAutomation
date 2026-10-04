@@ -118,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Ephemeral screenshot capture for vision: deleted immediately after response
     String? screenshotBase64;
     final bool canUseVision =
-        _visionEnabled && _aiService.isVisionSupported(_aiService.model);
+        _visionEnabled && AiService.isVisionSupported(_aiService.model);
     if (canUseVision) {
       try {
         screenshotBase64 =
@@ -1284,6 +1284,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildInputBar(bool isDark) {
+    final bool modelHasVision =
+        AiService.isVisionSupported(_aiService.model);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       decoration: const BoxDecoration(color: Colors.transparent),
@@ -1332,7 +1335,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Vision Toggle Button
           Tooltip(
             message: _visionEnabled
-                ? (_aiService.isVisionSupported(_aiService.model)
+                ? (modelHasVision
                     ? 'Vision Enabled (${_aiService.model})'
                     : 'Vision ON (Model does not support vision, using text)')
                 : 'Vision Disabled (Tap to enable)',
@@ -1341,13 +1344,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _visionEnabled
-                    ? (_aiService.isVisionSupported(_aiService.model)
+                    ? (modelHasVision
                         ? Theme.of(context).colorScheme.primary.withOpacity(0.18)
                         : Colors.amber.withOpacity(0.18))
                     : Theme.of(context).cardTheme.color,
                 border: Border.all(
                   color: _visionEnabled
-                      ? (_aiService.isVisionSupported(_aiService.model)
+                      ? (modelHasVision
                           ? Theme.of(context).colorScheme.primary
                           : Colors.amber)
                       : Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
@@ -1359,7 +1362,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
-                  if (_visionEnabled && _aiService.isVisionSupported(_aiService.model))
+                  if (_visionEnabled && modelHasVision)
                     BoxShadow(
                       color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
                       blurRadius: 10,
@@ -1370,12 +1373,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: IconButton(
                 icon: Icon(
                   _visionEnabled
-                      ? (_aiService.isVisionSupported(_aiService.model)
+                      ? (modelHasVision
                           ? Icons.visibility_rounded
                           : Icons.visibility_outlined)
                       : Icons.visibility_off_outlined,
                   color: _visionEnabled
-                      ? (_aiService.isVisionSupported(_aiService.model)
+                      ? (modelHasVision
                           ? Theme.of(context).colorScheme.primary
                           : Colors.amber)
                       : (isDark ? Colors.grey[500] : Colors.grey[400]),
@@ -1390,7 +1393,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         });
                         await _aiService.setVisionEnabled(newState);
                         if (!mounted) return;
-                        final supported = _aiService.isVisionSupported(_aiService.model);
+                        final supported =
+                            AiService.isVisionSupported(_aiService.model);
                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
